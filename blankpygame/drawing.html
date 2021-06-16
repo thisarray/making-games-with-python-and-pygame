@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Drawing</title>
+  <script src="../../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+
+<main>
+<h1>Drawing</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<h2>Attribution</h2>
+
+<p>From <a href="https://inventwithpython.com/pygame/chapter2.html">Making Games with Python &amp; Pygame chapter 2</a>.</p>
+
+<p>Original Python code released under a Simplified BSD license.</p>
+
+<h2>Original Python code</h2>
+
+<pre id="original"><code>
+import pygame, sys
+from pygame.locals import *
+
+pygame.init()
+
+# set up the window
+DISPLAYSURF = pygame.display.set_mode((500, 400), 0, 32)
+pygame.display.set_caption(&#x27;Drawing&#x27;)
+
+# set up the colors
+BLACK = (  0,   0,   0)
+WHITE = (255, 255, 255)
+RED   = (255,   0,   0)
+GREEN = (  0, 255,   0)
+BLUE  = (  0,   0, 255)
+
+# draw on the surface object
+DISPLAYSURF.fill(WHITE)
+pygame.draw.polygon(DISPLAYSURF, GREEN, ((146, 0), (291, 106), (236, 277), (56, 277), (0, 106)))
+pygame.draw.line(DISPLAYSURF, BLUE, (60, 60), (120, 60), 4)
+pygame.draw.line(DISPLAYSURF, BLUE, (120, 60), (60, 120))
+pygame.draw.line(DISPLAYSURF, BLUE, (60, 120), (120, 120), 4)
+pygame.draw.circle(DISPLAYSURF, BLUE, (300, 50), 20, 0)
+pygame.draw.ellipse(DISPLAYSURF, RED, (300, 250, 40, 80), 1)
+pygame.draw.rect(DISPLAYSURF, RED, (200, 150, 100, 50))
+
+pixObj = pygame.PixelArray(DISPLAYSURF)
+pixObj[480][380] = BLACK
+pixObj[482][382] = BLACK
+pixObj[484][384] = BLACK
+pixObj[486][386] = BLACK
+pixObj[488][388] = BLACK
+del pixObj
+
+# run the game loop
+while True:
+    for event in pygame.event.get():
+        if event.type == QUIT:
+            pygame.quit()
+            sys.exit()
+    pygame.display.update()
+</code></pre>
+</main>
+
+<script>
+// set up the window
+WIDTH = 500;
+HEIGHT = 400;
+TITLE = 'Drawing';
+
+// set up the colors
+const BLACK = [  0,   0,   0];
+const WHITE = [255, 255, 255];
+const RED   = [255,   0,   0];
+const GREEN = [  0, 255,   0];
+const BLUE  = [  0,   0, 255];
+
+function draw() {
+  // draw on the surface object
+  screen.fill(WHITE);
+  screen.draw.filled_polygon([[146, 0], [291, 106], [236, 277], [56, 277], [0, 106]], GREEN);
+  screen.draw.line([60, 60], [120, 60], BLUE, 4);
+  screen.draw.line([120, 60], [60, 120], BLUE);
+  screen.draw.line([60, 120], [120, 120], BLUE, 4);
+  screen.draw.filled_circle([300, 50], 20, BLUE);
+
+  /* !!! Note: Cannot draw a red ellipse onto the surface !!! */
+  screen.draw.circle([300, 250], 40, RED, 1);
+
+  screen.draw.filled_rect(new Rect(200, 150, 100, 50), RED);
+
+  let pixObj = screen.getSurface();
+  pixObj.setAt(480, 380, BLACK);
+  pixObj.setAt(482, 382, BLACK);
+  pixObj.setAt(484, 384, BLACK);
+  pixObj.setAt(486, 386, BLACK);
+  pixObj.setAt(488, 388, BLACK);
+  screen.blit(pixObj, [0, 0]);
+}
+
+window.addEventListener('load', (event) => {
+  screen.set_mode('#screen', '#reset', '#pause');
+});
+</script>
+</body>
+
+</html>
