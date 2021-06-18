@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Animation</title>
+  <script src="../../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+<section id="imageLoader" class="hidden">
+  <img class="hidden" src="images/catblink.png" alt="catblink" data-name="catblink">
+  <img class="hidden" src="images/cat.png" alt="cat" data-name="cat">
+</section>
+
+<main>
+<h1>Animation</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<h2>Attribution</h2>
+
+<p>From <a href="https://inventwithpython.com/pygame/chapter2.html">Making Games with Python &amp; Pygame chapter 2</a>.</p>
+
+<p>Original Python code released under a Simplified BSD license.</p>
+
+<p>Images licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/us/legalcode">Creative Commons BY-NC-SA</a>.</p>
+
+<h2>Original Python code</h2>
+
+<pre id="original"><code>
+import pygame, sys
+from pygame.locals import *
+
+pygame.init()
+
+FPS = 30 # frames per second setting
+fpsClock = pygame.time.Clock()
+
+# set up the window
+DISPLAYSURF = pygame.display.set_mode((400, 300), 0, 32)
+pygame.display.set_caption(&#x27;Animation&#x27;)
+
+WHITE = (255, 255, 255)
+catImg = pygame.image.load(&#x27;cat.png&#x27;)
+catx = 10
+caty = 10
+direction = &#x27;right&#x27;
+
+while True: # the main game loop
+    DISPLAYSURF.fill(WHITE)
+
+    if direction == &#x27;right&#x27;:
+        catx += 5
+        if catx == 280:
+            direction = &#x27;down&#x27;
+    elif direction == &#x27;down&#x27;:
+        caty += 5
+        if caty == 220:
+            direction = &#x27;left&#x27;
+    elif direction == &#x27;left&#x27;:
+        catx -= 5
+        if catx == 10:
+            direction = &#x27;up&#x27;
+    elif direction == &#x27;up&#x27;:
+        caty -= 5
+        if caty == 10:
+            direction = &#x27;right&#x27;
+
+    DISPLAYSURF.blit(catImg, (catx, caty))
+
+    for event in pygame.event.get():
+        if event.type == QUIT:
+            pygame.quit()
+            sys.exit()
+
+    pygame.display.update()
+    fpsClock.tick(FPS)
+</code></pre>
+</main>
+
+<script>
+// set up the window
+WIDTH = 400;
+HEIGHT = 300;
+TITLE = 'Animation';
+
+const WHITE = [255, 255, 255];
+var cat, direction;
+
+function reset() {
+  cat = new Actor('cat');
+  cat.x = 10;
+  cat.y = 10;
+  direction = 'right';
+}
+
+function draw() {
+  screen.fill(WHITE);
+  cat.draw();
+}
+
+function update() {
+  if (direction === 'right') {
+    cat.x += 5;
+    if (cat.x === 280) {
+      direction = 'down';
+    }
+  }
+  else if (direction === 'down') {
+    cat.y += 5;
+    if (cat.y === 220) {
+      direction = 'left';
+    }
+  }
+  else if (direction === 'left') {
+    cat.x -= 5;
+    if (cat.x === 10) {
+      direction = 'up';
+    }
+  }
+  else if (direction === 'up') {
+    cat.y -= 5;
+    if (cat.y === 10) {
+      direction = 'right';
+    }
+  }
+}
+
+window.addEventListener('load', (event) => {
+  images.LOAD('#imageLoader img');
+  reset();
+  screen.set_mode('#screen', '#reset', '#pause');
+});
+</script>
+</body>
+
+</html>
