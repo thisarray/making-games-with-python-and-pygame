@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memory Game</title>
+  <script src="../../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+
+<main>
+<h1>Memory Game</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<h2>Attribution</h2>
+
+<p>From <a href="https://inventwithpython.com/pygame/chapter3.html">Making Games with Python &amp; Pygame chapter 3</a>.</p>
+
+<p>Original Python code released under a Simplified BSD license.</p>
+
+<h2>Original Python code</h2>
+
+<pre id="original"><code>
+# Memory Puzzle
+# By Al Sweigart al@inventwithpython.com
+# http://inventwithpython.com/pygame
+# Released under a &quot;Simplified BSD&quot; license
+
+import random, pygame, sys
+from pygame.locals import *
+
+FPS = 30 # frames per second, the general speed of the program
+WINDOWWIDTH = 640 # size of window&#x27;s width in pixels
+WINDOWHEIGHT = 480 # size of windows&#x27; height in pixels
+REVEALSPEED = 8 # speed boxes&#x27; sliding reveals and covers
+BOXSIZE = 40 # size of box height &amp; width in pixels
+GAPSIZE = 10 # size of gap between boxes in pixels
+BOARDWIDTH = 10 # number of columns of icons
+BOARDHEIGHT = 7 # number of rows of icons
+assert (BOARDWIDTH * BOARDHEIGHT) % 2 == 0, &#x27;Board needs to have an even number of boxes for pairs of matches.&#x27;
+XMARGIN = int((WINDOWWIDTH - (BOARDWIDTH * (BOXSIZE + GAPSIZE))) / 2)
+YMARGIN = int((WINDOWHEIGHT - (BOARDHEIGHT * (BOXSIZE + GAPSIZE))) / 2)
+
+#            R    G    B
+GRAY     = (100, 100, 100)
+NAVYBLUE = ( 60,  60, 100)
+WHITE    = (255, 255, 255)
+RED      = (255,   0,   0)
+GREEN    = (  0, 255,   0)
+BLUE     = (  0,   0, 255)
+YELLOW   = (255, 255,   0)
+ORANGE   = (255, 128,   0)
+PURPLE   = (255,   0, 255)
+CYAN     = (  0, 255, 255)
+
+BGCOLOR = NAVYBLUE
+LIGHTBGCOLOR = GRAY
+BOXCOLOR = WHITE
+HIGHLIGHTCOLOR = BLUE
+
+DONUT = &#x27;donut&#x27;
+SQUARE = &#x27;square&#x27;
+DIAMOND = &#x27;diamond&#x27;
+LINES = &#x27;lines&#x27;
+OVAL = &#x27;oval&#x27;
+
+ALLCOLORS = (RED, GREEN, BLUE, YELLOW, ORANGE, PURPLE, CYAN)
+ALLSHAPES = (DONUT, SQUARE, DIAMOND, LINES, OVAL)
+assert len(ALLCOLORS) * len(ALLSHAPES) * 2 &gt;= BOARDWIDTH * BOARDHEIGHT, &quot;Board is too big for the number of shapes/colors defined.&quot;
+
+def main():
+    global FPSCLOCK, DISPLAYSURF
+    pygame.init()
+    FPSCLOCK = pygame.time.Clock()
+    DISPLAYSURF = pygame.display.set_mode((WINDOWWIDTH, WINDOWHEIGHT))
+
+    mousex = 0 # used to store x coordinate of mouse event
+    mousey = 0 # used to store y coordinate of mouse event
+    pygame.display.set_caption(&#x27;Memory Game&#x27;)
+
+    mainBoard = getRandomizedBoard()
+    revealedBoxes = generateRevealedBoxesData(False)
+
+    firstSelection = None # stores the (x, y) of the first box clicked.
+
+    DISPLAYSURF.fill(BGCOLOR)
+    startGameAnimation(mainBoard)
+
+    while True: # main game loop
+        mouseClicked = False
+
+        DISPLAYSURF.fill(BGCOLOR) # drawing the window
+        drawBoard(mainBoard, revealedBoxes)
+
+        for event in pygame.event.get(): # event handling loop
+            if event.type == QUIT or (event.type == KEYUP and event.key == K_ESCAPE):
+                pygame.quit()
+                sys.exit()
+            elif event.type == MOUSEMOTION:
+                mousex, mousey = event.pos
+            elif event.type == MOUSEBUTTONUP:
+                mousex, mousey = event.pos
+                mouseClicked = True
+
+        boxx, boxy = getBoxAtPixel(mousex, mousey)
+        if boxx != None and boxy != None:
+            # The mouse is currently over a box.
+            if not revealedBoxes[boxx][boxy]:
+                drawHighlightBox(boxx, boxy)
+            if not revealedBoxes[boxx][boxy] and mouseClicked:
+                revealBoxesAnimation(mainBoard, [(boxx, boxy)])
+                revealedBoxes[boxx][boxy] = True # set the box as &quot;revealed&quot;
+                if firstSelection == None: # the current box was the first box clicked
+                    firstSelection = (boxx, boxy)
+                else: # the current box was the second box clicked
+                    # Check if there is a match between the two icons.
+                    icon1shape, icon1color = getShapeAndColor(mainBoard, firstSelection[0], firstSelection[1])
+                    icon2shape, icon2color = getShapeAndColor(mainBoard, boxx, boxy)
+
+                    if icon1shape != icon2shape or icon1color != icon2color:
+                        # Icons don&#x27;t match. Re-cover up both selections.
+                        pygame.time.wait(1000) # 1000 milliseconds = 1 sec
+                        coverBoxesAnimation(mainBoard, [(firstSelection[0], firstSelection[1]), (boxx, boxy)])
+                        revealedBoxes[firstSelection[0]][firstSelection[1]] = False
+                        revealedBoxes[boxx][boxy] = False
+                    elif hasWon(revealedBoxes): # check if all pairs found
+                        gameWonAnimation(mainBoard)
+                        pygame.time.wait(2000)
+
+                        # Reset the board
+                        mainBoard = getRandomizedBoard()
+                        revealedBoxes = generateRevealedBoxesData(False)
+
+                        # Show the fully unrevealed board for a second.
+                        drawBoard(mainBoard, revealedBoxes)
+                        pygame.display.update()
+                        pygame.time.wait(1000)
+
+                        # Replay the start game animation.
+                        startGameAnimation(mainBoard)
+                    firstSelection = None # reset firstSelection variable
+
+        # Redraw the screen and wait a clock tick.
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
+
+
+def generateRevealedBoxesData(val):
+    revealedBoxes = []
+    for i in range(BOARDWIDTH):
+        revealedBoxes.append([val] * BOARDHEIGHT)
+    return revealedBoxes
+
+
+def getRandomizedBoard():
+    # Get a list of every possible shape in every possible color.
+    icons = []
+    for color in ALLCOLORS:
+        for shape in ALLSHAPES:
+            icons.append( (shape, color) )
+
+    random.shuffle(icons) # randomize the order of the icons list
+    numIconsUsed = int(BOARDWIDTH * BOARDHEIGHT / 2) # calculate how many icons are needed
+    icons = icons[:numIconsUsed] * 2 # make two of each
+    random.shuffle(icons)
+
+    # Create the board data structure, with randomly placed icons.
+    board = []
+    for x in range(BOARDWIDTH):
+        column = []
+        for y in range(BOARDHEIGHT):
+            column.append(icons[0])
+            del icons[0] # remove the icons as we assign them
+        board.append(column)
+    return board
+
+
+def splitIntoGroupsOf(groupSize, theList):
+    # splits a list into a list of lists, where the inner lists have at
+    # most groupSize number of items.
+    result = []
+    for i in range(0, len(theList), groupSize):
+        result.append(theList[i:i + groupSize])
+    return result
+
+
+def leftTopCoordsOfBox(boxx, boxy):
+    # Convert board coordinates to pixel coordinates
+    left = boxx * (BOXSIZE + GAPSIZE) + XMARGIN
+    top = boxy * (BOXSIZE + GAPSIZE) + YMARGIN
+    return (left, top)
+
+
+def getBoxAtPixel(x, y):
+    for boxx in range(BOARDWIDTH):
+        for boxy in range(BOARDHEIGHT):
+            left, top = leftTopCoordsOfBox(boxx, boxy)
+            boxRect = pygame.Rect(left, top, BOXSIZE, BOXSIZE)
+            if boxRect.collidepoint(x, y):
+                return (boxx, boxy)
+    return (None, None)
+
+
+def drawIcon(shape, color, boxx, boxy):
+    quarter = int(BOXSIZE * 0.25) # syntactic sugar
+    half =    int(BOXSIZE * 0.5)  # syntactic sugar
+
+    left, top = leftTopCoordsOfBox(boxx, boxy) # get pixel coords from board coords
+    # Draw the shapes
+    if shape == DONUT:
+        pygame.draw.circle(DISPLAYSURF, color, (left + half, top + half), half - 5)
+        pygame.draw.circle(DISPLAYSURF, BGCOLOR, (left + half, top + half), quarter - 5)
+    elif shape == SQUARE:
+        pygame.draw.rect(DISPLAYSURF, color, (left + quarter, top + quarter, BOXSIZE - half, BOXSIZE - half))
+    elif shape == DIAMOND:
+        pygame.draw.polygon(DISPLAYSURF, color, ((left + half, top), (left + BOXSIZE - 1, top + half), (left + half, top + BOXSIZE - 1), (left, top + half)))
+    elif shape == LINES:
+        for i in range(0, BOXSIZE, 4):
+            pygame.draw.line(DISPLAYSURF, color, (left, top + i), (left + i, top))
+            pygame.draw.line(DISPLAYSURF, color, (left + i, top + BOXSIZE - 1), (left + BOXSIZE - 1, top + i))
+    elif shape == OVAL:
+        pygame.draw.ellipse(DISPLAYSURF, color, (left, top + quarter, BOXSIZE, half))
+
+
+def getShapeAndColor(board, boxx, boxy):
+    # shape value for x, y spot is stored in board[x][y][0]
+    # color value for x, y spot is stored in board[x][y][1]
+    return board[boxx][boxy][0], board[boxx][boxy][1]
+
+
+def drawBoxCovers(board, boxes, coverage):
+    # Draws boxes being covered/revealed. &quot;boxes&quot; is a list
+    # of two-item lists, which have the x &amp; y spot of the box.
+    for box in boxes:
+        left, top = leftTopCoordsOfBox(box[0], box[1])
+        pygame.draw.rect(DISPLAYSURF, BGCOLOR, (left, top, BOXSIZE, BOXSIZE))
+        shape, color = getShapeAndColor(board, box[0], box[1])
+        drawIcon(shape, color, box[0], box[1])
+        if coverage &gt; 0: # only draw the cover if there is an coverage
+            pygame.draw.rect(DISPLAYSURF, BOXCOLOR, (left, top, coverage, BOXSIZE))
+    pygame.display.update()
+    FPSCLOCK.tick(FPS)
+
+
+def revealBoxesAnimation(board, boxesToReveal):
+    # Do the &quot;box reveal&quot; animation.
+    for coverage in range(BOXSIZE, (-REVEALSPEED) - 1, -REVEALSPEED):
+        drawBoxCovers(board, boxesToReveal, coverage)
+
+
+def coverBoxesAnimation(board, boxesToCover):
+    # Do the &quot;box cover&quot; animation.
+    for coverage in range(0, BOXSIZE + REVEALSPEED, REVEALSPEED):
+        drawBoxCovers(board, boxesToCover, coverage)
+
+
+def drawBoard(board, revealed):
+    # Draws all of the boxes in their covered or revealed state.
+    for boxx in range(BOARDWIDTH):
+        for boxy in range(BOARDHEIGHT):
+            left, top = leftTopCoordsOfBox(boxx, boxy)
+            if not revealed[boxx][boxy]:
+                # Draw a covered box.
+                pygame.draw.rect(DISPLAYSURF, BOXCOLOR, (left, top, BOXSIZE, BOXSIZE))
+            else:
+                # Draw the (revealed) icon.
+                shape, color = getShapeAndColor(board, boxx, boxy)
+                drawIcon(shape, color, boxx, boxy)
+
+
+def drawHighlightBox(boxx, boxy):
+    left, top = leftTopCoordsOfBox(boxx, boxy)
+    pygame.draw.rect(DISPLAYSURF, HIGHLIGHTCOLOR, (left - 5, top - 5, BOXSIZE + 10, BOXSIZE + 10), 4)
+
+
+def startGameAnimation(board):
+    # Randomly reveal the boxes 8 at a time.
+    coveredBoxes = generateRevealedBoxesData(False)
+    boxes = []
+    for x in range(BOARDWIDTH):
+        for y in range(BOARDHEIGHT):
+            boxes.append( (x, y) )
+    random.shuffle(boxes)
+    boxGroups = splitIntoGroupsOf(8, boxes)
+
+    drawBoard(board, coveredBoxes)
+    for boxGroup in boxGroups:
+        revealBoxesAnimation(board, boxGroup)
+        coverBoxesAnimation(board, boxGroup)
+
+
+def gameWonAnimation(board):
+    # flash the background color when the player has won
+    coveredBoxes = generateRevealedBoxesData(True)
+    color1 = LIGHTBGCOLOR
+    color2 = BGCOLOR
+
+    for i in range(13):
+        color1, color2 = color2, color1 # swap colors
+        DISPLAYSURF.fill(color1)
+        drawBoard(board, coveredBoxes)
+        pygame.display.update()
+        pygame.time.wait(300)
+
+
+def hasWon(revealedBoxes):
+    # Returns True if all the boxes have been revealed, otherwise False
+    for i in revealedBoxes:
+        if False in i:
+            return False # return False if any boxes are covered.
+    return True
+
+
+if __name__ == &#x27;__main__&#x27;:
+    main()
+</code></pre>
+</main>
+
+<script>
+WIDTH = 640; // size of window's width in pixels
+HEIGHT = 480; // size of windows' height in pixels
+TITLE = 'Memory Game';
+
+const FPS = 30; // frames per second, the general speed of the program
+const REVEALSPEED = 8; // speed boxes' sliding reveals and covers
+const BOXSIZE = 40; // size of box height & width in pixels
+const GAPSIZE = 10; // size of gap between boxes in pixels
+const BOARDWIDTH = 10; // number of columns of icons
+const BOARDHEIGHT = 7; // number of rows of icons
+console.assert(((BOARDWIDTH * BOARDHEIGHT) % 2) === 0, 'Board needs to have an even number of boxes for pairs of matches.');
+const XMARGIN = Math.trunc((WIDTH - (BOARDWIDTH * (BOXSIZE + GAPSIZE))) / 2);
+const YMARGIN = Math.trunc((HEIGHT - (BOARDHEIGHT * (BOXSIZE + GAPSIZE))) / 2);
+
+//                 R    G    B
+const GRAY     = [100, 100, 100];
+const NAVYBLUE = [ 60,  60, 100];
+const WHITE    = [255, 255, 255];
+const RED      = [255,   0,   0];
+const GREEN    = [  0, 255,   0];
+const BLUE     = [  0,   0, 255];
+const YELLOW   = [255, 255,   0];
+const ORANGE   = [255, 128,   0];
+const PURPLE   = [255,   0, 255];
+const CYAN     = [  0, 255, 255];
+
+const BGCOLOR = NAVYBLUE;
+const LIGHTBGCOLOR = GRAY;
+const BOXCOLOR = WHITE;
+const HIGHLIGHTCOLOR = BLUE;
+
+const DONUT = 'donut';
+const SQUARE = 'square';
+const DIAMOND = 'diamond';
+const LINES = 'lines';
+const OVAL = 'oval';
+
+const ALLCOLORS = [RED, GREEN, BLUE, YELLOW, ORANGE, PURPLE, CYAN];
+const ALLSHAPES = [DONUT, SQUARE, DIAMOND, LINES, OVAL];
+console.assert((ALLCOLORS.length * ALLSHAPES.length * 2) >= (BOARDWIDTH * BOARDHEIGHT), "Board is too big for the number of shapes/colors defined.");
+
+// Duration in seconds it takes to animate a box reveal or box cover
+const COVER_DURATION = ((BOXSIZE + REVEALSPEED) / REVEALSPEED) / FPS;
+
+/*
+ * Return a random integer N such that min <= N < max.
+ */
+function getRandomInteger(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor((Math.random() * (max - min)) + min);
+}
+
+/*
+ * Shuffle Array x in place.
+ */
+function shuffle(x) {
+  let j, temp;
+  for (let i = x.length - 1; i > 0; i--) {
+    // pick an element in x[:i+1] with which to exchange x[i]
+    j = getRandomInteger(0, i + 1);
+    temp = x[i];
+    x[i] = x[j];
+    x[j] = temp;
+  }
+}
+
+const State = Object.freeze({
+  START: 1,
+  PLAY: 2,
+  REVEAL1: 3,
+  REVEAL2: 4,
+  COVER: 5,
+  GAME_OVER: 6
+});
+
+var state, mousex, mousey, mainBoard, revealedBoxes, firstSelection, boxGroups, color1, color2, covers;
+
+function reset() {
+  mousex = 0; // used to store x coordinate of mouse event
+  mousey = 0; // used to store y coordinate of mouse event
+
+  mainBoard = getRandomizedBoard();
+  revealedBoxes = generateRevealedBoxesData(true);
+
+  firstSelection = null; // stores the (x, y) of the first box clicked.
+  boxGroups = [];
+  color1 = LIGHTBGCOLOR;
+  color2 = BGCOLOR;
+  covers = [];
+
+  state = State.START;
+  clock.schedule(startGameAnimation, 1);
+}
+
+function draw() {
+  if (state === State.GAME_OVER) {
+    screen.fill(color1);
+  }
+  else {
+    screen.fill(BGCOLOR); // drawing the window
+  }
+  drawBoard(mainBoard, revealedBoxes);
+
+  // Draws boxes being covered/revealed. "boxes" is a list
+  // of two-item lists, which have the x & y spot of the box.
+  for (let cover of covers) {
+    let [left, top] = leftTopCoordsOfBox(cover.boxx, cover.boxy),
+        [shape, color] = getShapeAndColor(mainBoard, cover.boxx, cover.boxy),
+        coverage = Math.max(0, Math.min(cover.width, BOXSIZE));
+    screen.draw.filled_rect(new Rect(left, top, BOXSIZE, BOXSIZE), BGCOLOR);
+    drawIcon(shape, color, cover.boxx, cover.boxy);
+    if (coverage > 0) { // only draw the cover if there is an coverage
+      screen.draw.filled_rect(new Rect(left, top, coverage, BOXSIZE), BOXCOLOR);
+    }
+  }
+
+  if (state === State.PLAY) {
+    let [boxx, boxy] = getBoxAtPixel(mousex, mousey);
+    if ((boxx != null) && (boxy != null)) {
+      // The mouse is currently over a box.
+      if (!revealedBoxes[boxx][boxy]) {
+        drawHighlightBox(boxx, boxy);
+      }
+    }
+  }
+}
+
+function update() {
+  if ((covers.length > 0) && covers.every(c => c.animation.done)) {
+    // If the cover animations are done
+    if (state === State.REVEAL1) {
+      state = State.PLAY;
+    }
+    else if (state === State.REVEAL2) {
+      firstSelection = null; // reset firstSelection variable
+      state = State.PLAY;
+    }
+    else if (state === State.COVER) {
+      if (covers[0].width > 0) {
+        state = State.PLAY;
+      }
+    }
+    covers = [];
+  }
+}
+
+function generateRevealedBoxesData(val) {
+  let revealedBoxes = [];
+  for (let i = 0; i < BOARDWIDTH; i++) {
+    revealedBoxes.push((new Array(BOARDHEIGHT)).fill(val));
+  }
+  return revealedBoxes;
+}
+
+/*
+ * Get a list of every possible shape in every possible color.
+ */
+function getRandomizedBoard() {
+  let icons = [],
+      numIconsUsed = Math.trunc((BOARDWIDTH * BOARDHEIGHT) / 2), // calculate how many icons are needed
+      board = [];
+  for (let color of ALLCOLORS) {
+    for (let shape of ALLSHAPES) {
+      icons.push([shape, color]);
+    }
+  }
+
+  shuffle(icons); // randomize the order of the icons list
+  icons = icons.slice(0, numIconsUsed);
+  for (let icon of icons.slice()) {
+    icons.push(icon.slice()); // make two of each
+  }
+  shuffle(icons);
+
+  // Create the board data structure, with randomly placed icons.
+  for (let x = 0; x < BOARDWIDTH; x++) {
+    let column = [];
+    for (let y = 0; y < BOARDHEIGHT; y++) {
+      column.push(icons.shift()); // remove the icons as we assign them
+    }
+    board.push(column);
+  }
+  return board;
+}
+
+/*
+ * Convert board coordinates to pixel coordinates
+ */
+function leftTopCoordsOfBox(boxx, boxy) {
+  return [(boxx * (BOXSIZE + GAPSIZE)) + XMARGIN, (boxy * (BOXSIZE + GAPSIZE)) + YMARGIN];
+}
+
+function getBoxAtPixel(x, y) {
+  for (let boxx = 0; boxx < BOARDWIDTH; boxx++) {
+    for (let boxy = 0; boxy < BOARDHEIGHT; boxy++) {
+      let [left, top] = leftTopCoordsOfBox(boxx, boxy),
+          boxRect = new Rect(left, top, BOXSIZE, BOXSIZE);
+      if (boxRect.collidepoint(x, y)) {
+        return [boxx, boxy];
+      }
+    }
+  }
+  return [null, null];
+}
+
+function drawIcon(shape, color, boxx, boxy) {
+  let quarter = Math.trunc(BOXSIZE * 0.25), // syntactic sugar
+      half =    Math.trunc(BOXSIZE * 0.5),  // syntactic sugar
+
+      [left, top] = leftTopCoordsOfBox(boxx, boxy); // get pixel coords from board coords
+  // Draw the shapes
+  if (shape === DONUT) {
+    screen.draw.filled_circle([left + half, top + half], half - 5, color);
+    screen.draw.filled_circle([left + half, top + half], quarter - 5, BGCOLOR);
+  }
+  else if (shape === SQUARE) {
+    screen.draw.filled_rect(new Rect(left + quarter, top + quarter, BOXSIZE - half, BOXSIZE - half), color);
+  }
+  else if (shape === DIAMOND) {
+    screen.draw.filled_polygon([[left + half, top], [left + BOXSIZE - 1, top + half], [left + half, top + BOXSIZE - 1], [left, top + half]], color);
+  }
+  else if (shape === LINES) {
+    for (let i = 0; i < BOXSIZE; i += 4) {
+      screen.draw.line([left, top + i], [left + i, top], color);
+      screen.draw.line([left + i, top + BOXSIZE - 1], [left + BOXSIZE - 1, top + i], color);
+    }
+  }
+  else if (shape === OVAL) {
+    screen.draw.filled_circle([left + half, top + half], half, color);
+  }
+}
+
+/*
+ * shape value for x, y spot is stored in board[x][y][0]
+ * color value for x, y spot is stored in board[x][y][1]
+ */
+function getShapeAndColor(board, boxx, boxy) {
+  return [board[boxx][boxy][0], board[boxx][boxy][1]];
+}
+
+/*
+ * Do the "box reveal" animation.
+ */
+function revealBoxesAnimation(board, boxesToReveal) {
+  covers = [];
+  for (let box of boxesToReveal) {
+    let [left, top] = leftTopCoordsOfBox(box[0], box[1]),
+        cover = new Rect(left, top, BOXSIZE, BOXSIZE),
+        finalWidth = (-REVEALSPEED) - 1;
+    cover.boxx = box[0];
+    cover.boxy = box[1];
+    cover.animation = animate(cover, COVER_DURATION, {width: finalWidth}, 'linear');
+    covers.push(cover);
+  }
+}
+
+/*
+ * Do the "box cover" animation.
+ */
+function coverBoxesAnimation(board, boxesToCover) {
+  covers = [];
+  for (let box of boxesToCover) {
+    let [left, top] = leftTopCoordsOfBox(box[0], box[1]),
+        cover = new Rect(left, top, 0, BOXSIZE),
+        finalWidth = BOXSIZE + REVEALSPEED;
+    cover.boxx = box[0];
+    cover.boxy = box[1];
+    cover.animation = animate(cover, COVER_DURATION, {width: finalWidth}, 'linear');
+    covers.push(cover);
+  }
+}
+
+function coverSelections() {
+  let [boxx, boxy] = getBoxAtPixel(mousex, mousey);
+  revealedBoxes[firstSelection[0]][firstSelection[1]] = false;
+  revealedBoxes[boxx][boxy] = false;
+  coverBoxesAnimation(mainBoard, [[firstSelection[0], firstSelection[1]], [boxx, boxy]]);
+  firstSelection = null; // reset firstSelection variable
+}
+
+/*
+ * Draws all of the boxes in their covered or revealed state.
+ */
+function drawBoard(board, revealed) {
+  for (let boxx = 0; boxx < BOARDWIDTH; boxx++) {
+    for (let boxy = 0; boxy < BOARDHEIGHT; boxy++) {
+      let [left, top] = leftTopCoordsOfBox(boxx, boxy),
+          [shape, color] = getShapeAndColor(board, boxx, boxy);
+      if (!revealed[boxx][boxy]) {
+        // Draw a covered box.
+        screen.draw.filled_rect(new Rect(left, top, BOXSIZE, BOXSIZE), BOXCOLOR);
+      }
+      else {
+        // Draw the (revealed) icon.
+        drawIcon(shape, color, boxx, boxy);
+      }
+    }
+  }
+}
+
+function drawHighlightBox(boxx, boxy) {
+  let [left, top] = leftTopCoordsOfBox(boxx, boxy);
+  screen.draw.rect(new Rect(left - 5, top - 5, BOXSIZE + 10, BOXSIZE + 10), HIGHLIGHTCOLOR, 4);
+}
+
+/*
+ * Randomly reveal the boxes 8 at a time.
+ */
+function startGameAnimation() {
+  revealedBoxes = generateRevealedBoxesData(false);
+  boxGroups = [];
+  let boxes = [],
+      group = [];
+  for (let x = 0; x < BOARDWIDTH; x++) {
+    for (let y = 0; y < BOARDHEIGHT; y++) {
+      boxes.push([x, y]);
+    }
+  }
+  shuffle(boxes);
+  while (boxes.length > 0) {
+    group.push(boxes.shift());
+    if (group.length >= 8) {
+      boxGroups.push(group);
+      group = [];
+    }
+  }
+  if (group.length > 0) {
+    boxGroups.push(group);
+  }
+  clock.schedule(startGameReveal, COVER_DURATION);
+}
+
+function startGameReveal() {
+  if (boxGroups.length > 0) {
+    revealBoxesAnimation(mainBoard, boxGroups[0]);
+    clock.schedule(startGameCover, COVER_DURATION);
+  }
+}
+
+function startGameCover() {
+  if (boxGroups.length > 0) {
+    coverBoxesAnimation(mainBoard, boxGroups.shift());
+    if (boxGroups.length > 0) {
+      clock.schedule(startGameReveal, COVER_DURATION);
+    }
+    else {
+      state = State.PLAY;
+    }
+  }
+}
+
+/*
+ * flash the background color when the player has won
+ */
+function gameWonAnimation() {
+  let temp = color1;
+  color1 = color2;
+  color2 = temp;
+  clock.schedule(gameWonAnimation, 0.3);
+}
+
+/*
+ * Returns True if all the boxes have been revealed, otherwise False
+ */
+function hasWon(revealedBoxes) {
+  for (let i of revealedBoxes) {
+    if (i.findIndex((e) => !e) >= 0) {
+      return false; // return False if any boxes are covered.
+    }
+  }
+  return true;
+}
+
+function on_mouse_down(pos, button) {
+  if (state === State.GAME_OVER) {
+    reset();
+  }
+  else if (state !== State.PLAY) {
+    return;
+  }
+
+  mousex = pos[0];
+  mousey = pos[1];
+  let [boxx, boxy] = getBoxAtPixel(mousex, mousey);
+  if ((boxx != null) && (boxy != null)) {
+    // The mouse is currently over a box.
+    if (!revealedBoxes[boxx][boxy]) {
+      revealedBoxes[boxx][boxy] = true; // set the box as "revealed"
+      if (firstSelection == null) { // the current box was the first box clicked
+        firstSelection = [boxx, boxy];
+        state = State.REVEAL1;
+      }
+      else { // the current box was the second box clicked
+        // Check if there is a match between the two icons.
+        let [icon1shape, icon1color] = getShapeAndColor(mainBoard, firstSelection[0], firstSelection[1]),
+            [icon2shape, icon2color] = getShapeAndColor(mainBoard, boxx, boxy);
+        if ((icon1shape !== icon2shape) || (icon1color !== icon2color)) {
+          // Icons don't match. Re-cover up both selections.
+          clock.schedule(coverSelections, COVER_DURATION + 1);
+          state = State.COVER;
+        }
+        else if (hasWon(revealedBoxes)) { // check if all pairs found
+          clock.schedule(gameWonAnimation, 0.3);
+          state = State.GAME_OVER;
+        }
+        else {
+          state = State.REVEAL2;
+        }
+      }
+      revealBoxesAnimation(mainBoard, [[boxx, boxy]]);
+    }
+  }
+}
+
+function on_mouse_move(pos, rel, buttons) {
+  if (state !== State.PLAY) {
+    return;
+  }
+
+  mousex = pos[0];
+  mousey = pos[1];
+}
+
+window.addEventListener('load', (event) => {
+  reset();
+  screen.set_mode('#screen', '#reset', '#pause');
+});
+</script>
+</body>
+
+</html>
