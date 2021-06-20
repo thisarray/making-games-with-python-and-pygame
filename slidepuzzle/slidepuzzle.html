@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slide Puzzle</title>
+  <script src="../../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+
+<main>
+<h1>Slide Puzzle</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<h2>Attribution</h2>
+
+<p>From <a href="https://inventwithpython.com/pygame/chapter4.html">Making Games with Python &amp; Pygame chapter 4</a>.</p>
+
+<p>Original Python code released under a Simplified BSD license.</p>
+
+<h2>Original Python code</h2>
+
+<pre id="original"><code>
+# Slide Puzzle
+# By Al Sweigart al@inventwithpython.com
+# http://inventwithpython.com/pygame
+# Released under a &quot;Simplified BSD&quot; license
+
+import pygame, sys, random
+from pygame.locals import *
+
+# Create the constants (go ahead and experiment with different values)
+BOARDWIDTH = 4  # number of columns in the board
+BOARDHEIGHT = 4 # number of rows in the board
+TILESIZE = 80
+WINDOWWIDTH = 640
+WINDOWHEIGHT = 480
+FPS = 30
+BLANK = None
+
+#                 R    G    B
+BLACK =         (  0,   0,   0)
+WHITE =         (255, 255, 255)
+BRIGHTBLUE =    (  0,  50, 255)
+DARKTURQUOISE = (  3,  54,  73)
+GREEN =         (  0, 204,   0)
+
+BGCOLOR = DARKTURQUOISE
+TILECOLOR = GREEN
+TEXTCOLOR = WHITE
+BORDERCOLOR = BRIGHTBLUE
+BASICFONTSIZE = 20
+
+BUTTONCOLOR = WHITE
+BUTTONTEXTCOLOR = BLACK
+MESSAGECOLOR = WHITE
+
+XMARGIN = int((WINDOWWIDTH - (TILESIZE * BOARDWIDTH + (BOARDWIDTH - 1))) / 2)
+YMARGIN = int((WINDOWHEIGHT - (TILESIZE * BOARDHEIGHT + (BOARDHEIGHT - 1))) / 2)
+
+UP = &#x27;up&#x27;
+DOWN = &#x27;down&#x27;
+LEFT = &#x27;left&#x27;
+RIGHT = &#x27;right&#x27;
+
+def main():
+    global FPSCLOCK, DISPLAYSURF, BASICFONT, RESET_SURF, RESET_RECT, NEW_SURF, NEW_RECT, SOLVE_SURF, SOLVE_RECT
+
+    pygame.init()
+    FPSCLOCK = pygame.time.Clock()
+    DISPLAYSURF = pygame.display.set_mode((WINDOWWIDTH, WINDOWHEIGHT))
+    pygame.display.set_caption(&#x27;Slide Puzzle&#x27;)
+    BASICFONT = pygame.font.Font(&#x27;freesansbold.ttf&#x27;, BASICFONTSIZE)
+
+    # Store the option buttons and their rectangles in OPTIONS.
+    RESET_SURF, RESET_RECT = makeText(&#x27;Reset&#x27;,    TEXTCOLOR, TILECOLOR, WINDOWWIDTH - 120, WINDOWHEIGHT - 90)
+    NEW_SURF,   NEW_RECT   = makeText(&#x27;New Game&#x27;, TEXTCOLOR, TILECOLOR, WINDOWWIDTH - 120, WINDOWHEIGHT - 60)
+    SOLVE_SURF, SOLVE_RECT = makeText(&#x27;Solve&#x27;,    TEXTCOLOR, TILECOLOR, WINDOWWIDTH - 120, WINDOWHEIGHT - 30)
+
+    mainBoard, solutionSeq = generateNewPuzzle(80)
+    SOLVEDBOARD = getStartingBoard() # a solved board is the same as the board in a start state.
+    allMoves = [] # list of moves made from the solved configuration
+
+    while True: # main game loop
+        slideTo = None # the direction, if any, a tile should slide
+        msg = &#x27;Click tile or press arrow keys to slide.&#x27; # contains the message to show in the upper left corner.
+        if mainBoard == SOLVEDBOARD:
+            msg = &#x27;Solved!&#x27;
+
+        drawBoard(mainBoard, msg)
+
+        checkForQuit()
+        for event in pygame.event.get(): # event handling loop
+            if event.type == MOUSEBUTTONUP:
+                spotx, spoty = getSpotClicked(mainBoard, event.pos[0], event.pos[1])
+
+                if (spotx, spoty) == (None, None):
+                    # check if the user clicked on an option button
+                    if RESET_RECT.collidepoint(event.pos):
+                        resetAnimation(mainBoard, allMoves) # clicked on Reset button
+                        allMoves = []
+                    elif NEW_RECT.collidepoint(event.pos):
+                        mainBoard, solutionSeq = generateNewPuzzle(80) # clicked on New Game button
+                        allMoves = []
+                    elif SOLVE_RECT.collidepoint(event.pos):
+                        resetAnimation(mainBoard, solutionSeq + allMoves) # clicked on Solve button
+                        allMoves = []
+                else:
+                    # check if the clicked tile was next to the blank spot
+
+                    blankx, blanky = getBlankPosition(mainBoard)
+                    if spotx == blankx + 1 and spoty == blanky:
+                        slideTo = LEFT
+                    elif spotx == blankx - 1 and spoty == blanky:
+                        slideTo = RIGHT
+                    elif spotx == blankx and spoty == blanky + 1:
+                        slideTo = UP
+                    elif spotx == blankx and spoty == blanky - 1:
+                        slideTo = DOWN
+
+            elif event.type == KEYUP:
+                # check if the user pressed a key to slide a tile
+                if event.key in (K_LEFT, K_a) and isValidMove(mainBoard, LEFT):
+                    slideTo = LEFT
+                elif event.key in (K_RIGHT, K_d) and isValidMove(mainBoard, RIGHT):
+                    slideTo = RIGHT
+                elif event.key in (K_UP, K_w) and isValidMove(mainBoard, UP):
+                    slideTo = UP
+                elif event.key in (K_DOWN, K_s) and isValidMove(mainBoard, DOWN):
+                    slideTo = DOWN
+
+        if slideTo:
+            slideAnimation(mainBoard, slideTo, &#x27;Click tile or press arrow keys to slide.&#x27;, 8) # show slide on screen
+            makeMove(mainBoard, slideTo)
+            allMoves.append(slideTo) # record the slide
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
+
+
+def terminate():
+    pygame.quit()
+    sys.exit()
+
+
+def checkForQuit():
+    for event in pygame.event.get(QUIT): # get all the QUIT events
+        terminate() # terminate if any QUIT events are present
+    for event in pygame.event.get(KEYUP): # get all the KEYUP events
+        if event.key == K_ESCAPE:
+            terminate() # terminate if the KEYUP event was for the Esc key
+        pygame.event.post(event) # put the other KEYUP event objects back
+
+
+def getStartingBoard():
+    # Return a board data structure with tiles in the solved state.
+    # For example, if BOARDWIDTH and BOARDHEIGHT are both 3, this function
+    # returns [[1, 4, 7], [2, 5, 8], [3, 6, BLANK]]
+    counter = 1
+    board = []
+    for x in range(BOARDWIDTH):
+        column = []
+        for y in range(BOARDHEIGHT):
+            column.append(counter)
+            counter += BOARDWIDTH
+        board.append(column)
+        counter -= BOARDWIDTH * (BOARDHEIGHT - 1) + BOARDWIDTH - 1
+
+    board[BOARDWIDTH-1][BOARDHEIGHT-1] = BLANK
+    return board
+
+
+def getBlankPosition(board):
+    # Return the x and y of board coordinates of the blank space.
+    for x in range(BOARDWIDTH):
+        for y in range(BOARDHEIGHT):
+            if board[x][y] == BLANK:
+                return (x, y)
+
+
+def makeMove(board, move):
+    # This function does not check if the move is valid.
+    blankx, blanky = getBlankPosition(board)
+
+    if move == UP:
+        board[blankx][blanky], board[blankx][blanky + 1] = board[blankx][blanky + 1], board[blankx][blanky]
+    elif move == DOWN:
+        board[blankx][blanky], board[blankx][blanky - 1] = board[blankx][blanky - 1], board[blankx][blanky]
+    elif move == LEFT:
+        board[blankx][blanky], board[blankx + 1][blanky] = board[blankx + 1][blanky], board[blankx][blanky]
+    elif move == RIGHT:
+        board[blankx][blanky], board[blankx - 1][blanky] = board[blankx - 1][blanky], board[blankx][blanky]
+
+
+def isValidMove(board, move):
+    blankx, blanky = getBlankPosition(board)
+    return (move == UP and blanky != len(board[0]) - 1) or \
+           (move == DOWN and blanky != 0) or \
+           (move == LEFT and blankx != len(board) - 1) or \
+           (move == RIGHT and blankx != 0)
+
+
+def getRandomMove(board, lastMove=None):
+    # start with a full list of all four moves
+    validMoves = [UP, DOWN, LEFT, RIGHT]
+
+    # remove moves from the list as they are disqualified
+    if lastMove == UP or not isValidMove(board, DOWN):
+        validMoves.remove(DOWN)
+    if lastMove == DOWN or not isValidMove(board, UP):
+        validMoves.remove(UP)
+    if lastMove == LEFT or not isValidMove(board, RIGHT):
+        validMoves.remove(RIGHT)
+    if lastMove == RIGHT or not isValidMove(board, LEFT):
+        validMoves.remove(LEFT)
+
+    # return a random move from the list of remaining moves
+    return random.choice(validMoves)
+
+
+def getLeftTopOfTile(tileX, tileY):
+    left = XMARGIN + (tileX * TILESIZE) + (tileX - 1)
+    top = YMARGIN + (tileY * TILESIZE) + (tileY - 1)
+    return (left, top)
+
+
+def getSpotClicked(board, x, y):
+    # from the x &amp; y pixel coordinates, get the x &amp; y board coordinates
+    for tileX in range(len(board)):
+        for tileY in range(len(board[0])):
+            left, top = getLeftTopOfTile(tileX, tileY)
+            tileRect = pygame.Rect(left, top, TILESIZE, TILESIZE)
+            if tileRect.collidepoint(x, y):
+                return (tileX, tileY)
+    return (None, None)
+
+
+def drawTile(tilex, tiley, number, adjx=0, adjy=0):
+    # draw a tile at board coordinates tilex and tiley, optionally a few
+    # pixels over (determined by adjx and adjy)
+    left, top = getLeftTopOfTile(tilex, tiley)
+    pygame.draw.rect(DISPLAYSURF, TILECOLOR, (left + adjx, top + adjy, TILESIZE, TILESIZE))
+    textSurf = BASICFONT.render(str(number), True, TEXTCOLOR)
+    textRect = textSurf.get_rect()
+    textRect.center = left + int(TILESIZE / 2) + adjx, top + int(TILESIZE / 2) + adjy
+    DISPLAYSURF.blit(textSurf, textRect)
+
+
+def makeText(text, color, bgcolor, top, left):
+    # create the Surface and Rect objects for some text.
+    textSurf = BASICFONT.render(text, True, color, bgcolor)
+    textRect = textSurf.get_rect()
+    textRect.topleft = (top, left)
+    return (textSurf, textRect)
+
+
+def drawBoard(board, message):
+    DISPLAYSURF.fill(BGCOLOR)
+    if message:
+        textSurf, textRect = makeText(message, MESSAGECOLOR, BGCOLOR, 5, 5)
+        DISPLAYSURF.blit(textSurf, textRect)
+
+    for tilex in range(len(board)):
+        for tiley in range(len(board[0])):
+            if board[tilex][tiley]:
+                drawTile(tilex, tiley, board[tilex][tiley])
+
+    left, top = getLeftTopOfTile(0, 0)
+    width = BOARDWIDTH * TILESIZE
+    height = BOARDHEIGHT * TILESIZE
+    pygame.draw.rect(DISPLAYSURF, BORDERCOLOR, (left - 5, top - 5, width + 11, height + 11), 4)
+
+    DISPLAYSURF.blit(RESET_SURF, RESET_RECT)
+    DISPLAYSURF.blit(NEW_SURF, NEW_RECT)
+    DISPLAYSURF.blit(SOLVE_SURF, SOLVE_RECT)
+
+
+def slideAnimation(board, direction, message, animationSpeed):
+    # Note: This function does not check if the move is valid.
+
+    blankx, blanky = getBlankPosition(board)
+    if direction == UP:
+        movex = blankx
+        movey = blanky + 1
+    elif direction == DOWN:
+        movex = blankx
+        movey = blanky - 1
+    elif direction == LEFT:
+        movex = blankx + 1
+        movey = blanky
+    elif direction == RIGHT:
+        movex = blankx - 1
+        movey = blanky
+
+    # prepare the base surface
+    drawBoard(board, message)
+    baseSurf = DISPLAYSURF.copy()
+    # draw a blank space over the moving tile on the baseSurf Surface.
+    moveLeft, moveTop = getLeftTopOfTile(movex, movey)
+    pygame.draw.rect(baseSurf, BGCOLOR, (moveLeft, moveTop, TILESIZE, TILESIZE))
+
+    for i in range(0, TILESIZE, animationSpeed):
+        # animate the tile sliding over
+        checkForQuit()
+        DISPLAYSURF.blit(baseSurf, (0, 0))
+        if direction == UP:
+            drawTile(movex, movey, board[movex][movey], 0, -i)
+        if direction == DOWN:
+            drawTile(movex, movey, board[movex][movey], 0, i)
+        if direction == LEFT:
+            drawTile(movex, movey, board[movex][movey], -i, 0)
+        if direction == RIGHT:
+            drawTile(movex, movey, board[movex][movey], i, 0)
+
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
+
+
+def generateNewPuzzle(numSlides):
+    # From a starting configuration, make numSlides number of moves (and
+    # animate these moves).
+    sequence = []
+    board = getStartingBoard()
+    drawBoard(board, &#x27;&#x27;)
+    pygame.display.update()
+    pygame.time.wait(500) # pause 500 milliseconds for effect
+    lastMove = None
+    for i in range(numSlides):
+        move = getRandomMove(board, lastMove)
+        slideAnimation(board, move, &#x27;Generating new puzzle...&#x27;, animationSpeed=int(TILESIZE / 3))
+        makeMove(board, move)
+        sequence.append(move)
+        lastMove = move
+    return (board, sequence)
+
+
+def resetAnimation(board, allMoves):
+    # make all of the moves in allMoves in reverse.
+    revAllMoves = allMoves[:] # gets a copy of the list
+    revAllMoves.reverse()
+
+    for move in revAllMoves:
+        if move == UP:
+            oppositeMove = DOWN
+        elif move == DOWN:
+            oppositeMove = UP
+        elif move == RIGHT:
+            oppositeMove = LEFT
+        elif move == LEFT:
+            oppositeMove = RIGHT
+        slideAnimation(board, oppositeMove, &#x27;&#x27;, animationSpeed=int(TILESIZE / 2))
+        makeMove(board, oppositeMove)
+
+
+if __name__ == &#x27;__main__&#x27;:
+    main()
+</code></pre>
+</main>
+
+<script>
+WIDTH = 640;
+HEIGHT = 480;
+TITLE = 'Slide Puzzle';
+
+// Create the constants (go ahead and experiment with different values)
+const BOARDWIDTH = 4;  // number of columns in the board
+const BOARDHEIGHT = 4; // number of rows in the board
+const TILESIZE = 80;
+const FPS = 30;
+const BLANK = 0;
+
+//                      R    G    B
+const BLACK =         [  0,   0,   0];
+const WHITE =         [255, 255, 255];
+const BRIGHTBLUE =    [  0,  50, 255];
+const DARKTURQUOISE = [  3,  54,  73];
+const GREEN =         [  0, 204,   0];
+
+const BGCOLOR = DARKTURQUOISE;
+const TILECOLOR = GREEN;
+const TEXTCOLOR = WHITE;
+const BORDERCOLOR = BRIGHTBLUE;
+const BASICFONTSIZE = 20;
+
+const BUTTONCOLOR = WHITE;
+const BUTTONTEXTCOLOR = BLACK;
+const MESSAGECOLOR = WHITE;
+
+const XMARGIN = Math.trunc((WIDTH - ((TILESIZE * BOARDWIDTH) + (BOARDWIDTH - 1))) / 2);
+const YMARGIN = Math.trunc((HEIGHT - ((TILESIZE * BOARDHEIGHT) + (BOARDHEIGHT - 1))) / 2);
+
+const UP = 'up';
+const DOWN = 'down';
+const LEFT = 'left';
+const RIGHT = 'right';
+
+/*
+ * Return a random integer N such that min <= N < max.
+ */
+function getRandomInteger(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor((Math.random() * (max - min)) + min);
+}
+
+const State = Object.freeze({
+  START: 1,
+  PLAY: 2,
+  MOVE: 3,
+  RESET: 4
+});
+
+var state, mainBoard, solutionSeq, allMoves, tile, movesToAnimate;
+
+function reset() {
+  solutionSeq = generateNewPuzzle(80);
+  mainBoard = getStartingBoard();
+  allMoves = []; // list of moves made from the solved configuration
+
+  // Animate modifying mainBoard with the moves in solutionSeq
+  state = State.START;
+  tile = null;
+  movesToAnimate = solutionSeq.slice();
+  slideAnimation(mainBoard, movesToAnimate.shift(), 'Generating new puzzle...', Math.trunc(TILESIZE / 3));
+}
+
+function draw() {
+  let msg = 'Click tile or press arrow keys to slide.'; // contains the message to show in the upper left corner.
+
+  if (tile != null) {
+    drawBoard(mainBoard, tile.message);
+
+    // draw a blank space over the moving tile on the baseSurf Surface.
+    screen.draw.filled_rect(new Rect(tile.newLeft, tile.newTop, TILESIZE, TILESIZE), BGCOLOR);
+    drawTile(tile.left, tile.top, tile.number);
+  }
+  else {
+    if (isSolved(mainBoard)) {
+      msg = 'Solved!';
+    }
+    drawBoard(mainBoard, msg);
+  }
+}
+
+function update() {
+  if (state === State.PLAY) {
+    // check if the user pressed a key to slide a tile
+    let slideTo = null; // the direction, if any, a tile should slide
+    if ((keyboard[keys.LEFT] || keyboard[keys.A]) && isValidMove(mainBoard, LEFT)) {
+      slideTo = LEFT;
+    }
+    else if ((keyboard[keys.RIGHT] || keyboard[keys.D]) && isValidMove(mainBoard, RIGHT)) {
+      slideTo = RIGHT;
+    }
+    else if ((keyboard[keys.UP] || keyboard[keys.W]) && isValidMove(mainBoard, UP)) {
+      slideTo = UP;
+    }
+    else if ((keyboard[keys.DOWN] || keyboard[keys.S]) && isValidMove(mainBoard, DOWN)) {
+      slideTo = DOWN;
+    }
+
+    if (slideTo != null) {
+      allMoves.push(slideTo); // record the slide
+      state = State.MOVE;
+      slideAnimation(mainBoard, slideTo, 'Click tile or press arrow keys to slide.', 8); // show slide on screen
+    }
+  }
+  else if ((tile != null) && tile.animation.done) {
+    if (movesToAnimate.length > 0) {
+      slideAnimation(mainBoard, movesToAnimate.shift(), tile.message, tile.speed);
+    }
+    else {
+      tile = null;
+      state = State.PLAY;
+    }
+  }
+}
+
+/*
+ * Return a board data structure with tiles in the solved state.
+ * For example, if BOARDWIDTH and BOARDHEIGHT are both 3, this function
+ * returns [[1, 4, 7], [2, 5, 8], [3, 6, BLANK]]
+ */
+function getStartingBoard() {
+  let counter = 1,
+      board = [],
+      column;
+  for (let x = 0; x < BOARDWIDTH; x++) {
+    column = [];
+    for (let y = 0; y < BOARDHEIGHT; y++) {
+      column.push(counter);
+      counter += BOARDWIDTH;
+    }
+    board.push(column);
+    counter -= (BOARDWIDTH * (BOARDHEIGHT - 1)) + BOARDWIDTH - 1;
+  }
+
+  board[BOARDWIDTH-1][BOARDHEIGHT-1] = BLANK;
+  return board;
+}
+
+/*
+ * Return true if board contains a solved board.
+ */
+function isSolved(board) {
+  let expected = getStartingBoard(); // a solved board is the same as the board in a start state.
+  for (let x = 0; x < BOARDWIDTH; x++) {
+    for (let y = 0; y < BOARDHEIGHT; y++) {
+      if (board[x][y] !== expected[x][y]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/*
+ * Return the x and y of board coordinates of the blank space.
+ */
+function getBlankPosition(board) {
+  for (let x = 0; x < BOARDWIDTH; x++) {
+    for (let y = 0; y < BOARDHEIGHT; y++) {
+      if (board[x][y] === BLANK) {
+        return [x, y];
+      }
+    }
+  }
+}
+
+/*
+ * This function does not check if the move is valid.
+ */
+function makeMove(board, move) {
+  let [blankx, blanky] = getBlankPosition(board),
+      temp = board[blankx][blanky];
+
+  if (move === UP) {
+    board[blankx][blanky] = board[blankx][blanky+1];
+    board[blankx][blanky+1] = temp;
+  }
+  else if (move === DOWN) {
+    board[blankx][blanky] = board[blankx][blanky-1];
+    board[blankx][blanky-1] = temp;
+  }
+  else if (move === LEFT) {
+    board[blankx][blanky] = board[blankx+1][blanky];
+    board[blankx+1][blanky] = temp;
+  }
+  else if (move === RIGHT) {
+    board[blankx][blanky] = board[blankx-1][blanky];
+    board[blankx-1][blanky] = temp;
+  }
+}
+
+function isValidMove(board, move) {
+  let [blankx, blanky] = getBlankPosition(board);
+  return (((move === UP) && (blanky !== (board[0].length - 1))) ||
+          ((move === DOWN) && (blanky !== 0)) ||
+          ((move === LEFT) && (blankx !== (board.length - 1))) ||
+          ((move === RIGHT) && (blankx !== 0)));
+}
+
+function getRandomMove(board, lastMove) {
+  // start with a full list of all four moves
+  let validMoves = new Set([UP, DOWN, LEFT, RIGHT]);
+
+  // remove moves from the list as they are disqualified
+  if ((lastMove === UP) || (!isValidMove(board, DOWN))) {
+    validMoves.delete(DOWN);
+  }
+  if ((lastMove === DOWN) || (!isValidMove(board, UP))) {
+    validMoves.delete(UP);
+  }
+  if ((lastMove === LEFT) || (!isValidMove(board, RIGHT))) {
+    validMoves.delete(RIGHT);
+  }
+  if ((lastMove === RIGHT) || (!isValidMove(board, LEFT))) {
+    validMoves.delete(LEFT);
+  }
+
+  // return a random move from the list of remaining moves
+  validMoves = Array.from(validMoves);
+  return validMoves[getRandomInteger(0, validMoves.length)];
+}
+
+function getLeftTopOfTile(tileX, tileY) {
+  return [XMARGIN + (tileX * TILESIZE) + (tileX - 1), YMARGIN + (tileY * TILESIZE) + (tileY - 1)];
+}
+
+/*
+ * from the x & y pixel coordinates, get the x & y board coordinates
+ */
+function getSpotClicked(board, x, y) {
+  for (let tileX = 0; tileX < board.length; tileX++) {
+    for (let tileY = 0; tileY < board[0].length; tileY++) {
+      let [left, top] = getLeftTopOfTile(tileX, tileY),
+          tileRect = new Rect(left, top, TILESIZE, TILESIZE);
+      if (tileRect.collidepoint(x, y)) {
+        return [tileX, tileY];
+      }
+    }
+  }
+  return [null, null];
+}
+
+function drawTile(left, top, number) {
+  screen.draw.filled_rect(new Rect(left, top, TILESIZE, TILESIZE), TILECOLOR);
+  screen.draw.text(number.toFixed(0), {
+    fontsize: BASICFONTSIZE,
+    color: TEXTCOLOR,
+    center: [left + Math.trunc(TILESIZE / 2), top + Math.trunc(TILESIZE / 2)]
+  });
+}
+
+function drawBoard(board, message) {
+  screen.fill(BGCOLOR);
+  if ((typeof message === 'string') && (message.length > 0)) {
+    screen.draw.text(message, {
+      fontsize: BASICFONTSIZE,
+      color: MESSAGECOLOR,
+      topleft: [5, 5]
+    });
+  }
+  for (let tilex = 0; tilex < board.length; tilex++) {
+    for (let tiley = 0; tiley < board[0].length; tiley++) {
+      if (board[tilex][tiley] !== BLANK) {
+        let [left, top] = getLeftTopOfTile(tilex, tiley);
+        drawTile(left, top, board[tilex][tiley]);
+      }
+    }
+  }
+
+  let [left, top] = getLeftTopOfTile(0, 0),
+      width = BOARDWIDTH * TILESIZE,
+      height = BOARDHEIGHT * TILESIZE;
+  screen.draw.rect(new Rect(left - 5, top - 5, width + 11, height + 11), BORDERCOLOR, 4);
+
+  screen.draw.text('Reset', {
+    fontsize: BASICFONTSIZE,
+    color: TEXTCOLOR,
+    topleft: [WIDTH - 120, HEIGHT - 90]
+  });
+  screen.draw.text('New Game', {
+    fontsize: BASICFONTSIZE,
+    color: TEXTCOLOR,
+    topleft: [WIDTH - 120, HEIGHT - 60]
+  });
+  screen.draw.text('Solve', {
+    fontsize: BASICFONTSIZE,
+    color: TEXTCOLOR,
+    topleft: [WIDTH - 120, HEIGHT - 30]
+  });
+}
+
+/*
+ * Note: This function does not check if the move is valid.
+ */
+function slideAnimation(board, direction, message, animationSpeed) {
+  let [blankx, blanky] = getBlankPosition(board),
+      movex, movey;
+  if (direction === UP) {
+    movex = blankx;
+    movey = blanky + 1;
+  }
+  else if (direction === DOWN) {
+    movex = blankx;
+    movey = blanky - 1;
+  }
+  else if (direction === LEFT) {
+    movex = blankx + 1;
+    movey = blanky;
+  }
+  else if (direction === RIGHT) {
+    movex = blankx - 1;
+    movey = blanky;
+  }
+
+  let [moveLeft, moveTop] = getLeftTopOfTile(movex, movey),
+      [newLeft, newTop] = getLeftTopOfTile(blankx, blanky);
+  tile = new Rect(moveLeft, moveTop, TILESIZE, TILESIZE);
+  tile.newLeft = newLeft;
+  tile.newTop = newTop;
+  tile.number = board[movex][movey];
+  tile.message = message;
+  tile.speed = animationSpeed;
+
+  makeMove(board, direction);
+  tile.animation = animate(tile, (TILESIZE / animationSpeed) / FPS, {topleft: [newLeft, newTop]}, 'linear');
+}
+
+/*
+ * From a starting configuration, make numSlides number of moves (and
+ * NOT animate these moves).
+ */
+function generateNewPuzzle(numSlides) {
+  let sequence = [],
+      board = getStartingBoard(),
+      lastMove = null,
+      move;
+  for (let i = 0; i < numSlides; i++) {
+    move = getRandomMove(board, lastMove);
+    makeMove(board, move);
+    sequence.push(move);
+    lastMove = move;
+  }
+  return sequence;
+}
+
+/*
+ * make all of the moves in allMoves in reverse.
+ */
+function resetAnimation(allMoves) {
+  let revAllMoves = allMoves.slice(), // gets a copy of the list
+      result = [];
+  revAllMoves.reverse();
+
+  for (let move of revAllMoves) {
+    if (move === UP) {
+      result.push(DOWN);
+    }
+    else if (move === DOWN) {
+      result.push(UP);
+    }
+    else if (move === RIGHT) {
+      result.push(LEFT);
+    }
+    else if (move === LEFT) {
+      result.push(RIGHT);
+    }
+  }
+  return result;
+}
+
+function on_mouse_down(pos, button) {
+  if (state !== State.PLAY) {
+    return;
+  }
+
+  let [spotx, spoty] = getSpotClicked(mainBoard, pos[0], pos[1]);
+
+  if ((spotx == null) && (spoty == null)) {
+    // check if the user clicked on an option button
+    if (pos[0] > (WIDTH - 120)) {
+      if (pos[1] > (HEIGHT - 30)) {
+        movesToAnimate = resetAnimation(solutionSeq.concat(allMoves)); // clicked on Solve button
+        solutionSeq = [];
+        allMoves = [];
+        if (movesToAnimate.length > 0) {
+          state = State.RESET;
+          slideAnimation(mainBoard, movesToAnimate.shift(), '', Math.trunc(TILESIZE / 2));
+        }
+      }
+      else if (pos[1] > (HEIGHT - 60)) {
+        reset(); // clicked on New Game button
+      }
+      else if (pos[1] > (HEIGHT - 90)) {
+        movesToAnimate = resetAnimation(allMoves); // clicked on Reset button
+        allMoves = [];
+        if (movesToAnimate.length > 0) {
+          state = State.RESET;
+          slideAnimation(mainBoard, movesToAnimate.shift(), '', Math.trunc(TILESIZE / 2));
+        }
+      }
+    }
+  }
+  else {
+    // check if the clicked tile was next to the blank spot
+
+    let [blankx, blanky] = getBlankPosition(mainBoard),
+        slideTo = null; // the direction, if any, a tile should slide
+    if ((spotx === (blankx + 1)) && (spoty == blanky)) {
+      slideTo = LEFT;
+    }
+    else if ((spotx === (blankx - 1)) && (spoty == blanky)) {
+      slideTo = RIGHT;
+    }
+    else if ((spotx === blankx) && (spoty === (blanky + 1))) {
+      slideTo = UP;
+    }
+    else if ((spotx === blankx) && (spoty === (blanky - 1))) {
+      slideTo = DOWN;
+    }
+
+    if (slideTo != null) {
+      allMoves.push(slideTo); // record the slide
+      state = State.MOVE;
+      slideAnimation(mainBoard, slideTo, 'Click tile or press arrow keys to slide.', 8); // show slide on screen
+    }
+  }
+}
+
+window.addEventListener('load', (event) => {
+  reset();
+  screen.set_mode('#screen', '#reset', '#pause');
+});
+</script>
+</body>
+
+</html>
