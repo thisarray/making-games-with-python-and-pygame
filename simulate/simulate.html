@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulate</title>
+  <script src="../../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+<section id="soundLoader" class="hidden">
+  <audio class="hidden" controls preload="auto" src="sounds/beep1.ogg" data-name="beep1">Your browser does not support the audio element.</audio>
+  <audio class="hidden" controls preload="auto" src="sounds/beep2.ogg" data-name="beep2">Your browser does not support the audio element.</audio>
+  <audio class="hidden" controls preload="auto" src="sounds/beep3.ogg" data-name="beep3">Your browser does not support the audio element.</audio>
+  <audio class="hidden" controls preload="auto" src="sounds/beep4.ogg" data-name="beep4">Your browser does not support the audio element.</audio>
+</section>
+
+<main>
+<h1>Simulate</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<h2>Attribution</h2>
+
+<p>From <a href="https://inventwithpython.com/pygame/chapter5.html">Making Games with Python &amp; Pygame chapter 5</a>.</p>
+
+<p>Original Python code released under a Simplified BSD license.</p>
+
+<p>Sounds licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/us/legalcode">Creative Commons BY-NC-SA</a>.</p>
+
+<h2>Original Python code</h2>
+
+<pre id="original"><code>
+# Simulate (a Simon clone)
+# By Al Sweigart al@inventwithpython.com
+# http://inventwithpython.com/pygame
+# Released under a &quot;Simplified BSD&quot; license
+
+import random, sys, time, pygame
+from pygame.locals import *
+
+FPS = 30
+WINDOWWIDTH = 640
+WINDOWHEIGHT = 480
+FLASHSPEED = 500 # in milliseconds
+FLASHDELAY = 200 # in milliseconds
+BUTTONSIZE = 200
+BUTTONGAPSIZE = 20
+TIMEOUT = 4 # seconds before game over if no button is pushed.
+
+#                R    G    B
+WHITE        = (255, 255, 255)
+BLACK        = (  0,   0,   0)
+BRIGHTRED    = (255,   0,   0)
+RED          = (155,   0,   0)
+BRIGHTGREEN  = (  0, 255,   0)
+GREEN        = (  0, 155,   0)
+BRIGHTBLUE   = (  0,   0, 255)
+BLUE         = (  0,   0, 155)
+BRIGHTYELLOW = (255, 255,   0)
+YELLOW       = (155, 155,   0)
+DARKGRAY     = ( 40,  40,  40)
+bgColor = BLACK
+
+XMARGIN = int((WINDOWWIDTH - (2 * BUTTONSIZE) - BUTTONGAPSIZE) / 2)
+YMARGIN = int((WINDOWHEIGHT - (2 * BUTTONSIZE) - BUTTONGAPSIZE) / 2)
+
+# Rect objects for each of the four buttons
+YELLOWRECT = pygame.Rect(XMARGIN, YMARGIN, BUTTONSIZE, BUTTONSIZE)
+BLUERECT   = pygame.Rect(XMARGIN + BUTTONSIZE + BUTTONGAPSIZE, YMARGIN, BUTTONSIZE, BUTTONSIZE)
+REDRECT    = pygame.Rect(XMARGIN, YMARGIN + BUTTONSIZE + BUTTONGAPSIZE, BUTTONSIZE, BUTTONSIZE)
+GREENRECT  = pygame.Rect(XMARGIN + BUTTONSIZE + BUTTONGAPSIZE, YMARGIN + BUTTONSIZE + BUTTONGAPSIZE, BUTTONSIZE, BUTTONSIZE)
+
+def main():
+    global FPSCLOCK, DISPLAYSURF, BASICFONT, BEEP1, BEEP2, BEEP3, BEEP4
+
+    pygame.init()
+    FPSCLOCK = pygame.time.Clock()
+    DISPLAYSURF = pygame.display.set_mode((WINDOWWIDTH, WINDOWHEIGHT))
+    pygame.display.set_caption(&#x27;Simulate&#x27;)
+
+    BASICFONT = pygame.font.Font(&#x27;freesansbold.ttf&#x27;, 16)
+    infoSurf = BASICFONT.render(&#x27;Match the pattern by clicking on the button or using the Q, W, A, S keys.&#x27;, 1, DARKGRAY)
+    infoRect = infoSurf.get_rect()
+    infoRect.topleft = (10, WINDOWHEIGHT - 25)
+
+    # load the sound files
+    BEEP1 = pygame.mixer.Sound(&#x27;beep1.ogg&#x27;)
+    BEEP2 = pygame.mixer.Sound(&#x27;beep2.ogg&#x27;)
+    BEEP3 = pygame.mixer.Sound(&#x27;beep3.ogg&#x27;)
+    BEEP4 = pygame.mixer.Sound(&#x27;beep4.ogg&#x27;)
+
+    # Initialize some variables for a new game
+    pattern = [] # stores the pattern of colors
+    currentStep = 0 # the color the player must push next
+    lastClickTime = 0 # timestamp of the player&#x27;s last button push
+    score = 0
+    # when False, the pattern is playing. when True, waiting for the player to click a colored button:
+    waitingForInput = False
+
+    while True: # main game loop
+        clickedButton = None # button that was clicked (set to YELLOW, RED, GREEN, or BLUE)
+        DISPLAYSURF.fill(bgColor)
+        drawButtons()
+
+        scoreSurf = BASICFONT.render(&#x27;Score: &#x27; + str(score), 1, WHITE)
+        scoreRect = scoreSurf.get_rect()
+        scoreRect.topleft = (WINDOWWIDTH - 100, 10)
+        DISPLAYSURF.blit(scoreSurf, scoreRect)
+
+        DISPLAYSURF.blit(infoSurf, infoRect)
+
+        checkForQuit()
+        for event in pygame.event.get(): # event handling loop
+            if event.type == MOUSEBUTTONUP:
+                mousex, mousey = event.pos
+                clickedButton = getButtonClicked(mousex, mousey)
+            elif event.type == KEYDOWN:
+                if event.key == K_q:
+                    clickedButton = YELLOW
+                elif event.key == K_w:
+                    clickedButton = BLUE
+                elif event.key == K_a:
+                    clickedButton = RED
+                elif event.key == K_s:
+                    clickedButton = GREEN
+
+
+
+        if not waitingForInput:
+            # play the pattern
+            pygame.display.update()
+            pygame.time.wait(1000)
+            pattern.append(random.choice((YELLOW, BLUE, RED, GREEN)))
+            for button in pattern:
+                flashButtonAnimation(button)
+                pygame.time.wait(FLASHDELAY)
+            waitingForInput = True
+        else:
+            # wait for the player to enter buttons
+            if clickedButton and clickedButton == pattern[currentStep]:
+                # pushed the correct button
+                flashButtonAnimation(clickedButton)
+                currentStep += 1
+                lastClickTime = time.time()
+
+                if currentStep == len(pattern):
+                    # pushed the last button in the pattern
+                    changeBackgroundAnimation()
+                    score += 1
+                    waitingForInput = False
+                    currentStep = 0 # reset back to first step
+
+            elif (clickedButton and clickedButton != pattern[currentStep]) or (currentStep != 0 and time.time() - TIMEOUT &gt; lastClickTime):
+                # pushed the incorrect button, or has timed out
+                gameOverAnimation()
+                # reset the variables for a new game:
+                pattern = []
+                currentStep = 0
+                waitingForInput = False
+                score = 0
+                pygame.time.wait(1000)
+                changeBackgroundAnimation()
+
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
+
+
+def terminate():
+    pygame.quit()
+    sys.exit()
+
+
+def checkForQuit():
+    for event in pygame.event.get(QUIT): # get all the QUIT events
+        terminate() # terminate if any QUIT events are present
+    for event in pygame.event.get(KEYUP): # get all the KEYUP events
+        if event.key == K_ESCAPE:
+            terminate() # terminate if the KEYUP event was for the Esc key
+        pygame.event.post(event) # put the other KEYUP event objects back
+
+
+def flashButtonAnimation(color, animationSpeed=50):
+    if color == YELLOW:
+        sound = BEEP1
+        flashColor = BRIGHTYELLOW
+        rectangle = YELLOWRECT
+    elif color == BLUE:
+        sound = BEEP2
+        flashColor = BRIGHTBLUE
+        rectangle = BLUERECT
+    elif color == RED:
+        sound = BEEP3
+        flashColor = BRIGHTRED
+        rectangle = REDRECT
+    elif color == GREEN:
+        sound = BEEP4
+        flashColor = BRIGHTGREEN
+        rectangle = GREENRECT
+
+    origSurf = DISPLAYSURF.copy()
+    flashSurf = pygame.Surface((BUTTONSIZE, BUTTONSIZE))
+    flashSurf = flashSurf.convert_alpha()
+    r, g, b = flashColor
+    sound.play()
+    for start, end, step in ((0, 255, 1), (255, 0, -1)): # animation loop
+        for alpha in range(start, end, animationSpeed * step):
+            checkForQuit()
+            DISPLAYSURF.blit(origSurf, (0, 0))
+            flashSurf.fill((r, g, b, alpha))
+            DISPLAYSURF.blit(flashSurf, rectangle.topleft)
+            pygame.display.update()
+            FPSCLOCK.tick(FPS)
+    DISPLAYSURF.blit(origSurf, (0, 0))
+
+
+def drawButtons():
+    pygame.draw.rect(DISPLAYSURF, YELLOW, YELLOWRECT)
+    pygame.draw.rect(DISPLAYSURF, BLUE,   BLUERECT)
+    pygame.draw.rect(DISPLAYSURF, RED,    REDRECT)
+    pygame.draw.rect(DISPLAYSURF, GREEN,  GREENRECT)
+
+
+def changeBackgroundAnimation(animationSpeed=40):
+    global bgColor
+    newBgColor = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+
+    newBgSurf = pygame.Surface((WINDOWWIDTH, WINDOWHEIGHT))
+    newBgSurf = newBgSurf.convert_alpha()
+    r, g, b = newBgColor
+    for alpha in range(0, 255, animationSpeed): # animation loop
+        checkForQuit()
+        DISPLAYSURF.fill(bgColor)
+
+        newBgSurf.fill((r, g, b, alpha))
+        DISPLAYSURF.blit(newBgSurf, (0, 0))
+
+        drawButtons() # redraw the buttons on top of the tint
+
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
+    bgColor = newBgColor
+
+
+def gameOverAnimation(color=WHITE, animationSpeed=50):
+    # play all beeps at once, then flash the background
+    origSurf = DISPLAYSURF.copy()
+    flashSurf = pygame.Surface(DISPLAYSURF.get_size())
+    flashSurf = flashSurf.convert_alpha()
+    BEEP1.play() # play all four beeps at the same time, roughly.
+    BEEP2.play()
+    BEEP3.play()
+    BEEP4.play()
+    r, g, b = color
+    for i in range(3): # do the flash 3 times
+        for start, end, step in ((0, 255, 1), (255, 0, -1)):
+            # The first iteration in this loop sets the following for loop
+            # to go from 0 to 255, the second from 255 to 0.
+            for alpha in range(start, end, animationSpeed * step): # animation loop
+                # alpha means transparency. 255 is opaque, 0 is invisible
+                checkForQuit()
+                flashSurf.fill((r, g, b, alpha))
+                DISPLAYSURF.blit(origSurf, (0, 0))
+                DISPLAYSURF.blit(flashSurf, (0, 0))
+                drawButtons()
+                pygame.display.update()
+                FPSCLOCK.tick(FPS)
+
+
+
+def getButtonClicked(x, y):
+    if YELLOWRECT.collidepoint( (x, y) ):
+        return YELLOW
+    elif BLUERECT.collidepoint( (x, y) ):
+        return BLUE
+    elif REDRECT.collidepoint( (x, y) ):
+        return RED
+    elif GREENRECT.collidepoint( (x, y) ):
+        return GREEN
+    return None
+
+
+if __name__ == &#x27;__main__&#x27;:
+    main()
+</code></pre>
+</main>
+
+<script>
+WIDTH = 640;
+HEIGHT = 480;
+TITLE = 'Simulate';
+
+const FPS = 30;
+const FLASHSPEED = 500; // in milliseconds
+const FLASHDELAY = 200; // in milliseconds
+const BUTTONSIZE = 200;
+const BUTTONGAPSIZE = 20;
+const TIMEOUT = 4; // seconds before game over if no button is pushed.
+
+//                     R    G    B
+const WHITE        = [255, 255, 255];
+const BLACK        = [  0,   0,   0];
+const BRIGHTRED    = [255,   0,   0];
+const RED          = [155,   0,   0];
+const BRIGHTGREEN  = [  0, 255,   0];
+const GREEN        = [  0, 155,   0];
+const BRIGHTBLUE   = [  0,   0, 255];
+const BLUE         = [  0,   0, 155];
+const BRIGHTYELLOW = [255, 255,   0];
+const YELLOW       = [155, 155,   0];
+const DARKGRAY     = [ 40,  40,  40];
+
+const XMARGIN = Math.trunc((WIDTH - (2 * BUTTONSIZE) - BUTTONGAPSIZE) / 2);
+const YMARGIN = Math.trunc((HEIGHT - (2 * BUTTONSIZE) - BUTTONGAPSIZE) / 2);
+
+// Rect objects for each of the four buttons
+const YELLOWRECT = new Rect(XMARGIN, YMARGIN, BUTTONSIZE, BUTTONSIZE);
+const BLUERECT   = new Rect(XMARGIN + BUTTONSIZE + BUTTONGAPSIZE, YMARGIN, BUTTONSIZE, BUTTONSIZE);
+const REDRECT    = new Rect(XMARGIN, YMARGIN + BUTTONSIZE + BUTTONGAPSIZE, BUTTONSIZE, BUTTONSIZE);
+const GREENRECT  = new Rect(XMARGIN + BUTTONSIZE + BUTTONGAPSIZE, YMARGIN + BUTTONSIZE + BUTTONGAPSIZE, BUTTONSIZE, BUTTONSIZE);
+
+const FONT_SIZE = 16;
+const FLASH_DURATION = 12 / FPS;
+
+/*
+ * Return a random integer N such that min <= N < max.
+ */
+function getRandomInteger(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor((Math.random() * (max - min)) + min);
+}
+
+const State = Object.freeze({
+  SHOW: 1,
+  PLAY: 2,
+  FLASH: 3,
+  CHANGE: 4,
+  GAME_OVER: 5
+});
+
+var state, bgColor, pattern, currentStep, lastClickTime, score, surface;
+
+function reset() {
+  bgColor = BLACK;
+  YELLOWRECT.flashColor = BRIGHTYELLOW;
+  YELLOWRECT.alpha = 0;
+  BLUERECT.flashColor = BRIGHTBLUE;
+  BLUERECT.alpha = 0;
+  REDRECT.flashColor = BRIGHTRED;
+  REDRECT.alpha = 0;
+  GREENRECT.flashColor = BRIGHTGREEN;
+  GREENRECT.alpha = 0;
+
+  resetGame();
+}
+
+function resetGame() {
+  // Initialize some variables for a new game
+  pattern = []; // stores the pattern of colors
+  currentStep = 0; // the color the player must push next
+  lastClickTime = 0; // timestamp of the player's last button push
+  score = 0;
+  surface = null;
+
+  addToPattern();
+}
+
+function draw() {
+  screen.fill(bgColor);
+  drawButtons();
+
+  screen.draw.text('Score: ' + score, {
+    fontsize: FONT_SIZE,
+    color: WHITE,
+    topleft: [WIDTH - 100, 10]
+  });
+
+  screen.draw.text('Match the pattern by clicking on the button or using the Q, W, A, S keys.', {
+    fontsize: FONT_SIZE,
+    color: DARKGRAY,
+    topleft: [10, HEIGHT - 25]
+  });
+
+  for (let r of [YELLOWRECT, BLUERECT, REDRECT, GREENRECT]) {
+    if (r.animation != null) {
+      let color = r.flashColor.slice();
+      if (r.alpha < 255) {
+        color.push(r.alpha);
+      }
+      else {
+        color.push(510 - r.alpha);
+      }
+      screen.draw.filled_rect(r, color);
+    }
+  }
+
+  if (surface != null) {
+    let color = surface.color.slice();
+    if (surface.alpha < 255) {
+      color.push(surface.alpha);
+    }
+    else {
+      color.push(510 - surface.alpha);
+    }
+    screen.draw.filled_rect(surface, color);
+    drawButtons(); // redraw the buttons on top of the tint
+  }
+}
+
+function update(dt) {
+  if (state === State.PLAY) {
+    lastClickTime += dt;
+
+    let clickedButton = null;
+    if (keyboard[keys.Q]) {
+      clickedButton = YELLOW;
+    }
+    else if (keyboard[keys.W]) {
+      clickedButton = BLUE;
+    }
+    else if (keyboard[keys.A]) {
+      clickedButton = RED;
+    }
+    else if (keyboard[keys.S]) {
+      clickedButton = GREEN;
+    }
+
+    checkButton(clickedButton);
+  }
+}
+
+function addToPattern() {
+  state = State.SHOW;
+
+  // play the pattern
+  pattern.push([YELLOW, BLUE, RED, GREEN][getRandomInteger(0, 4)]);
+  let delay = 1,
+      increment = (FLASHDELAY / 1000) + FLASH_DURATION,
+      callback;
+  for (let color of pattern) {
+    if (Surface.isColorEqual(color, YELLOW)) {
+      callback = flashYellow;
+    }
+    else if (Surface.isColorEqual(color, BLUE)) {
+      callback = flashBlue;
+    }
+    else if (Surface.isColorEqual(color, RED)) {
+      callback = flashRed;
+    }
+    else if (Surface.isColorEqual(color, GREEN)) {
+      callback = flashGreen;
+    }
+    clock.schedule(callback, delay);
+    delay += increment;
+  }
+  clock.schedule(patternEnd, delay);
+}
+
+function patternEnd() {
+  state = State.PLAY;
+}
+
+function flashYellow() {
+  flashButtonAnimation(YELLOW);
+}
+
+function flashBlue() {
+  flashButtonAnimation(BLUE);
+}
+
+function flashRed() {
+  flashButtonAnimation(RED);
+}
+
+function flashGreen() {
+  flashButtonAnimation(GREEN);
+}
+
+function flashEnd() {
+  for (let r of [YELLOWRECT, BLUERECT, REDRECT, GREENRECT]) {
+    r.animation = null;
+  }
+  if (currentStep === pattern.length) {
+    // pushed the last button in the pattern
+    state = State.CHANGE;
+    let newBgColor = [getRandomInteger(0, 256), getRandomInteger(0, 256), getRandomInteger(0, 256)];
+    surface = new Rect(0, 0, WIDTH, HEIGHT);
+    surface.color = newBgColor;
+    surface.alpha = 0;
+    surface.animation = animate(surface, FLASH_DURATION / 2, {alpha: 254}, 'linear', changeEnd);
+  }
+  else {
+    state = State.PLAY;
+  }
+}
+
+function changeEnd() {
+  bgColor = surface.color;
+  surface = null;
+  score += 1;
+  currentStep = 0; // reset back to first step
+  addToPattern();
+}
+
+function gameEnd() {
+  if (surface != null) {
+    surface.alpha = 0;
+    surface.animation = animate(surface, FLASH_DURATION, {alpha: 509}, 'linear', gameEnd);
+  }
+}
+
+function checkButton(clickedButton) {
+  // wait for the player to enter buttons
+  if ((clickedButton != null) && (clickedButton === pattern[currentStep])) {
+    // pushed the correct button
+    state = State.FLASH;
+    flashButtonAnimation(clickedButton, flashEnd);
+    currentStep += 1;
+    lastClickTime = 0;
+  }
+  else if (((clickedButton != null) && (clickedButton !== pattern[currentStep])) || ((currentStep !== 0) && (lastClickTime > TIMEOUT))) {
+    // pushed the incorrect button, or has timed out
+    // play all beeps at once, then flash the background
+    state = State.GAME_OVER;
+    sounds.beep1.play(); // play all four beeps at the same time, roughly.
+    sounds.beep2.play();
+    sounds.beep3.play();
+    sounds.beep4.play();
+    surface = new Rect(0, 0, WIDTH, HEIGHT);
+    surface.color = WHITE;
+    surface.alpha = 0;
+    surface.animation = animate(surface, FLASH_DURATION, {alpha: 509}, 'linear', gameEnd);
+  }
+}
+
+function flashButtonAnimation(color, callback) {
+  let r;
+  if (Surface.isColorEqual(color, YELLOW)) {
+    r = YELLOWRECT;
+    sounds.beep1.play();
+  }
+  else if (Surface.isColorEqual(color, BLUE)) {
+    r = BLUERECT;
+    sounds.beep2.play();
+  }
+  else if (Surface.isColorEqual(color, RED)) {
+    r = REDRECT;
+    sounds.beep3.play();
+  }
+  else if (Surface.isColorEqual(color, GREEN)) {
+    r = GREENRECT;
+    sounds.beep4.play();
+  }
+  r.alpha = 0;
+  r.animation = animate(r, FLASH_DURATION, {alpha: 509}, 'linear', callback);
+}
+
+function drawButtons() {
+  screen.draw.filled_rect(YELLOWRECT, YELLOW);
+  screen.draw.filled_rect(BLUERECT, BLUE);
+  screen.draw.filled_rect(REDRECT, RED);
+  screen.draw.filled_rect(GREENRECT, GREEN);
+}
+
+function getButtonClicked(x, y) {
+  if (YELLOWRECT.collidepoint([x, y])) {
+    return YELLOW;
+  }
+  else if (BLUERECT.collidepoint([x, y])) {
+    return BLUE;
+  }
+  else if (REDRECT.collidepoint([x, y])) {
+    return RED;
+  }
+  else if (GREENRECT.collidepoint([x, y])) {
+    return GREEN;
+  }
+  return null;
+}
+
+function on_mouse_down(pos, button) {
+  if (state === State.PLAY) {
+    checkButton(getButtonClicked(pos[0], pos[1]));
+  }
+  else if (state === State.GAME_OVER) {
+    resetGame();
+  }
+}
+
+window.addEventListener('load', (event) => {
+  sounds.LOAD('#soundLoader audio');
+  reset();
+  screen.set_mode('#screen', '#reset', '#pause');
+});
+</script>
+</body>
+
+</html>
