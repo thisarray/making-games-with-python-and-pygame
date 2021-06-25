@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tetromino</title>
+  <script src="../../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+
+<main>
+<h1>Tetromino</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<h2>Attribution</h2>
+
+<p>From <a href="https://inventwithpython.com/pygame/chapter7.html">Making Games with Python &amp; Pygame chapter 7</a>.</p>
+
+<p>Original Python code released under a Simplified BSD license.</p>
+
+<h2>Original Python code</h2>
+
+<pre id="original"><code>
+# Tetromino (a Tetris clone)
+# By Al Sweigart al@inventwithpython.com
+# http://inventwithpython.com/pygame
+# Released under a &quot;Simplified BSD&quot; license
+
+import random, time, pygame, sys
+from pygame.locals import *
+
+FPS = 25
+WINDOWWIDTH = 640
+WINDOWHEIGHT = 480
+BOXSIZE = 20
+BOARDWIDTH = 10
+BOARDHEIGHT = 20
+BLANK = &#x27;.&#x27;
+
+MOVESIDEWAYSFREQ = 0.15
+MOVEDOWNFREQ = 0.1
+
+XMARGIN = int((WINDOWWIDTH - BOARDWIDTH * BOXSIZE) / 2)
+TOPMARGIN = WINDOWHEIGHT - (BOARDHEIGHT * BOXSIZE) - 5
+
+#               R    G    B
+WHITE       = (255, 255, 255)
+GRAY        = (185, 185, 185)
+BLACK       = (  0,   0,   0)
+RED         = (155,   0,   0)
+LIGHTRED    = (175,  20,  20)
+GREEN       = (  0, 155,   0)
+LIGHTGREEN  = ( 20, 175,  20)
+BLUE        = (  0,   0, 155)
+LIGHTBLUE   = ( 20,  20, 175)
+YELLOW      = (155, 155,   0)
+LIGHTYELLOW = (175, 175,  20)
+
+BORDERCOLOR = BLUE
+BGCOLOR = BLACK
+TEXTCOLOR = WHITE
+TEXTSHADOWCOLOR = GRAY
+COLORS      = (     BLUE,      GREEN,      RED,      YELLOW)
+LIGHTCOLORS = (LIGHTBLUE, LIGHTGREEN, LIGHTRED, LIGHTYELLOW)
+assert len(COLORS) == len(LIGHTCOLORS) # each color must have light color
+
+TEMPLATEWIDTH = 5
+TEMPLATEHEIGHT = 5
+
+S_SHAPE_TEMPLATE = [[&#x27;.....&#x27;,
+                     &#x27;.....&#x27;,
+                     &#x27;..OO.&#x27;,
+                     &#x27;.OO..&#x27;,
+                     &#x27;.....&#x27;],
+                    [&#x27;.....&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;..OO.&#x27;,
+                     &#x27;...O.&#x27;,
+                     &#x27;.....&#x27;]]
+
+Z_SHAPE_TEMPLATE = [[&#x27;.....&#x27;,
+                     &#x27;.....&#x27;,
+                     &#x27;.OO..&#x27;,
+                     &#x27;..OO.&#x27;,
+                     &#x27;.....&#x27;],
+                    [&#x27;.....&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;.OO..&#x27;,
+                     &#x27;.O...&#x27;,
+                     &#x27;.....&#x27;]]
+
+I_SHAPE_TEMPLATE = [[&#x27;..O..&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;.....&#x27;],
+                    [&#x27;.....&#x27;,
+                     &#x27;.....&#x27;,
+                     &#x27;OOOO.&#x27;,
+                     &#x27;.....&#x27;,
+                     &#x27;.....&#x27;]]
+
+O_SHAPE_TEMPLATE = [[&#x27;.....&#x27;,
+                     &#x27;.....&#x27;,
+                     &#x27;.OO..&#x27;,
+                     &#x27;.OO..&#x27;,
+                     &#x27;.....&#x27;]]
+
+J_SHAPE_TEMPLATE = [[&#x27;.....&#x27;,
+                     &#x27;.O...&#x27;,
+                     &#x27;.OOO.&#x27;,
+                     &#x27;.....&#x27;,
+                     &#x27;.....&#x27;],
+                    [&#x27;.....&#x27;,
+                     &#x27;..OO.&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;.....&#x27;],
+                    [&#x27;.....&#x27;,
+                     &#x27;.....&#x27;,
+                     &#x27;.OOO.&#x27;,
+                     &#x27;...O.&#x27;,
+                     &#x27;.....&#x27;],
+                    [&#x27;.....&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;.OO..&#x27;,
+                     &#x27;.....&#x27;]]
+
+L_SHAPE_TEMPLATE = [[&#x27;.....&#x27;,
+                     &#x27;...O.&#x27;,
+                     &#x27;.OOO.&#x27;,
+                     &#x27;.....&#x27;,
+                     &#x27;.....&#x27;],
+                    [&#x27;.....&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;..OO.&#x27;,
+                     &#x27;.....&#x27;],
+                    [&#x27;.....&#x27;,
+                     &#x27;.....&#x27;,
+                     &#x27;.OOO.&#x27;,
+                     &#x27;.O...&#x27;,
+                     &#x27;.....&#x27;],
+                    [&#x27;.....&#x27;,
+                     &#x27;.OO..&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;.....&#x27;]]
+
+T_SHAPE_TEMPLATE = [[&#x27;.....&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;.OOO.&#x27;,
+                     &#x27;.....&#x27;,
+                     &#x27;.....&#x27;],
+                    [&#x27;.....&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;..OO.&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;.....&#x27;],
+                    [&#x27;.....&#x27;,
+                     &#x27;.....&#x27;,
+                     &#x27;.OOO.&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;.....&#x27;],
+                    [&#x27;.....&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;.OO..&#x27;,
+                     &#x27;..O..&#x27;,
+                     &#x27;.....&#x27;]]
+
+PIECES = {&#x27;S&#x27;: S_SHAPE_TEMPLATE,
+          &#x27;Z&#x27;: Z_SHAPE_TEMPLATE,
+          &#x27;J&#x27;: J_SHAPE_TEMPLATE,
+          &#x27;L&#x27;: L_SHAPE_TEMPLATE,
+          &#x27;I&#x27;: I_SHAPE_TEMPLATE,
+          &#x27;O&#x27;: O_SHAPE_TEMPLATE,
+          &#x27;T&#x27;: T_SHAPE_TEMPLATE}
+
+
+def main():
+    global FPSCLOCK, DISPLAYSURF, BASICFONT, BIGFONT
+    pygame.init()
+    FPSCLOCK = pygame.time.Clock()
+    DISPLAYSURF = pygame.display.set_mode((WINDOWWIDTH, WINDOWHEIGHT))
+    BASICFONT = pygame.font.Font(&#x27;freesansbold.ttf&#x27;, 18)
+    BIGFONT = pygame.font.Font(&#x27;freesansbold.ttf&#x27;, 100)
+    pygame.display.set_caption(&#x27;Tetromino&#x27;)
+
+    showTextScreen(&#x27;Tetromino&#x27;)
+    while True: # game loop
+        if random.randint(0, 1) == 0:
+            pygame.mixer.music.load(&#x27;tetrisb.mid&#x27;)
+        else:
+            pygame.mixer.music.load(&#x27;tetrisc.mid&#x27;)
+        pygame.mixer.music.play(-1, 0.0)
+        runGame()
+        pygame.mixer.music.stop()
+        showTextScreen(&#x27;Game Over&#x27;)
+
+
+def runGame():
+    # setup variables for the start of the game
+    board = getBlankBoard()
+    lastMoveDownTime = time.time()
+    lastMoveSidewaysTime = time.time()
+    lastFallTime = time.time()
+    movingDown = False # note: there is no movingUp variable
+    movingLeft = False
+    movingRight = False
+    score = 0
+    level, fallFreq = calculateLevelAndFallFreq(score)
+
+    fallingPiece = getNewPiece()
+    nextPiece = getNewPiece()
+
+    while True: # game loop
+        if fallingPiece == None:
+            # No falling piece in play, so start a new piece at the top
+            fallingPiece = nextPiece
+            nextPiece = getNewPiece()
+            lastFallTime = time.time() # reset lastFallTime
+
+            if not isValidPosition(board, fallingPiece):
+                return # can&#x27;t fit a new piece on the board, so game over
+
+        checkForQuit()
+        for event in pygame.event.get(): # event handling loop
+            if event.type == KEYUP:
+                if (event.key == K_p):
+                    # Pausing the game
+                    DISPLAYSURF.fill(BGCOLOR)
+                    pygame.mixer.music.stop()
+                    showTextScreen(&#x27;Paused&#x27;) # pause until a key press
+                    pygame.mixer.music.play(-1, 0.0)
+                    lastFallTime = time.time()
+                    lastMoveDownTime = time.time()
+                    lastMoveSidewaysTime = time.time()
+                elif (event.key == K_LEFT or event.key == K_a):
+                    movingLeft = False
+                elif (event.key == K_RIGHT or event.key == K_d):
+                    movingRight = False
+                elif (event.key == K_DOWN or event.key == K_s):
+                    movingDown = False
+
+            elif event.type == KEYDOWN:
+                # moving the piece sideways
+                if (event.key == K_LEFT or event.key == K_a) and isValidPosition(board, fallingPiece, adjX=-1):
+                    fallingPiece[&#x27;x&#x27;] -= 1
+                    movingLeft = True
+                    movingRight = False
+                    lastMoveSidewaysTime = time.time()
+
+                elif (event.key == K_RIGHT or event.key == K_d) and isValidPosition(board, fallingPiece, adjX=1):
+                    fallingPiece[&#x27;x&#x27;] += 1
+                    movingRight = True
+                    movingLeft = False
+                    lastMoveSidewaysTime = time.time()
+
+                # rotating the piece (if there is room to rotate)
+                elif (event.key == K_UP or event.key == K_w):
+                    fallingPiece[&#x27;rotation&#x27;] = (fallingPiece[&#x27;rotation&#x27;] + 1) % len(PIECES[fallingPiece[&#x27;shape&#x27;]])
+                    if not isValidPosition(board, fallingPiece):
+                        fallingPiece[&#x27;rotation&#x27;] = (fallingPiece[&#x27;rotation&#x27;] - 1) % len(PIECES[fallingPiece[&#x27;shape&#x27;]])
+                elif (event.key == K_q): # rotate the other direction
+                    fallingPiece[&#x27;rotation&#x27;] = (fallingPiece[&#x27;rotation&#x27;] - 1) % len(PIECES[fallingPiece[&#x27;shape&#x27;]])
+                    if not isValidPosition(board, fallingPiece):
+                        fallingPiece[&#x27;rotation&#x27;] = (fallingPiece[&#x27;rotation&#x27;] + 1) % len(PIECES[fallingPiece[&#x27;shape&#x27;]])
+
+                # making the piece fall faster with the down key
+                elif (event.key == K_DOWN or event.key == K_s):
+                    movingDown = True
+                    if isValidPosition(board, fallingPiece, adjY=1):
+                        fallingPiece[&#x27;y&#x27;] += 1
+                    lastMoveDownTime = time.time()
+
+                # move the current piece all the way down
+                elif event.key == K_SPACE:
+                    movingDown = False
+                    movingLeft = False
+                    movingRight = False
+                    for i in range(1, BOARDHEIGHT):
+                        if not isValidPosition(board, fallingPiece, adjY=i):
+                            break
+                    fallingPiece[&#x27;y&#x27;] += i - 1
+
+        # handle moving the piece because of user input
+        if (movingLeft or movingRight) and time.time() - lastMoveSidewaysTime &gt; MOVESIDEWAYSFREQ:
+            if movingLeft and isValidPosition(board, fallingPiece, adjX=-1):
+                fallingPiece[&#x27;x&#x27;] -= 1
+            elif movingRight and isValidPosition(board, fallingPiece, adjX=1):
+                fallingPiece[&#x27;x&#x27;] += 1
+            lastMoveSidewaysTime = time.time()
+
+        if movingDown and time.time() - lastMoveDownTime &gt; MOVEDOWNFREQ and isValidPosition(board, fallingPiece, adjY=1):
+            fallingPiece[&#x27;y&#x27;] += 1
+            lastMoveDownTime = time.time()
+
+        # let the piece fall if it is time to fall
+        if time.time() - lastFallTime &gt; fallFreq:
+            # see if the piece has landed
+            if not isValidPosition(board, fallingPiece, adjY=1):
+                # falling piece has landed, set it on the board
+                addToBoard(board, fallingPiece)
+                score += removeCompleteLines(board)
+                level, fallFreq = calculateLevelAndFallFreq(score)
+                fallingPiece = None
+            else:
+                # piece did not land, just move the piece down
+                fallingPiece[&#x27;y&#x27;] += 1
+                lastFallTime = time.time()
+
+        # drawing everything on the screen
+        DISPLAYSURF.fill(BGCOLOR)
+        drawBoard(board)
+        drawStatus(score, level)
+        drawNextPiece(nextPiece)
+        if fallingPiece != None:
+            drawPiece(fallingPiece)
+
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
+
+
+def makeTextObjs(text, font, color):
+    surf = font.render(text, True, color)
+    return surf, surf.get_rect()
+
+
+def terminate():
+    pygame.quit()
+    sys.exit()
+
+
+def checkForKeyPress():
+    # Go through event queue looking for a KEYUP event.
+    # Grab KEYDOWN events to remove them from the event queue.
+    checkForQuit()
+
+    for event in pygame.event.get([KEYDOWN, KEYUP]):
+        if event.type == KEYDOWN:
+            continue
+        return event.key
+    return None
+
+
+def showTextScreen(text):
+    # This function displays large text in the
+    # center of the screen until a key is pressed.
+    # Draw the text drop shadow
+    titleSurf, titleRect = makeTextObjs(text, BIGFONT, TEXTSHADOWCOLOR)
+    titleRect.center = (int(WINDOWWIDTH / 2), int(WINDOWHEIGHT / 2))
+    DISPLAYSURF.blit(titleSurf, titleRect)
+
+    # Draw the text
+    titleSurf, titleRect = makeTextObjs(text, BIGFONT, TEXTCOLOR)
+    titleRect.center = (int(WINDOWWIDTH / 2) - 3, int(WINDOWHEIGHT / 2) - 3)
+    DISPLAYSURF.blit(titleSurf, titleRect)
+
+    # Draw the additional &quot;Press a key to play.&quot; text.
+    pressKeySurf, pressKeyRect = makeTextObjs(&#x27;Press a key to play.&#x27;, BASICFONT, TEXTCOLOR)
+    pressKeyRect.center = (int(WINDOWWIDTH / 2), int(WINDOWHEIGHT / 2) + 100)
+    DISPLAYSURF.blit(pressKeySurf, pressKeyRect)
+
+    while checkForKeyPress() == None:
+        pygame.display.update()
+        FPSCLOCK.tick()
+
+
+def checkForQuit():
+    for event in pygame.event.get(QUIT): # get all the QUIT events
+        terminate() # terminate if any QUIT events are present
+    for event in pygame.event.get(KEYUP): # get all the KEYUP events
+        if event.key == K_ESCAPE:
+            terminate() # terminate if the KEYUP event was for the Esc key
+        pygame.event.post(event) # put the other KEYUP event objects back
+
+
+def calculateLevelAndFallFreq(score):
+    # Based on the score, return the level the player is on and
+    # how many seconds pass until a falling piece falls one space.
+    level = int(score / 10) + 1
+    fallFreq = 0.27 - (level * 0.02)
+    return level, fallFreq
+
+def getNewPiece():
+    # return a random new piece in a random rotation and color
+    shape = random.choice(list(PIECES.keys()))
+    newPiece = {&#x27;shape&#x27;: shape,
+                &#x27;rotation&#x27;: random.randint(0, len(PIECES[shape]) - 1),
+                &#x27;x&#x27;: int(BOARDWIDTH / 2) - int(TEMPLATEWIDTH / 2),
+                &#x27;y&#x27;: -2, # start it above the board (i.e. less than 0)
+                &#x27;color&#x27;: random.randint(0, len(COLORS)-1)}
+    return newPiece
+
+
+def addToBoard(board, piece):
+    # fill in the board based on piece&#x27;s location, shape, and rotation
+    for x in range(TEMPLATEWIDTH):
+        for y in range(TEMPLATEHEIGHT):
+            if PIECES[piece[&#x27;shape&#x27;]][piece[&#x27;rotation&#x27;]][y][x] != BLANK:
+                board[x + piece[&#x27;x&#x27;]][y + piece[&#x27;y&#x27;]] = piece[&#x27;color&#x27;]
+
+
+def getBlankBoard():
+    # create and return a new blank board data structure
+    board = []
+    for i in range(BOARDWIDTH):
+        board.append([BLANK] * BOARDHEIGHT)
+    return board
+
+
+def isOnBoard(x, y):
+    return x &gt;= 0 and x &lt; BOARDWIDTH and y &lt; BOARDHEIGHT
+
+
+def isValidPosition(board, piece, adjX=0, adjY=0):
+    # Return True if the piece is within the board and not colliding
+    for x in range(TEMPLATEWIDTH):
+        for y in range(TEMPLATEHEIGHT):
+            isAboveBoard = y + piece[&#x27;y&#x27;] + adjY &lt; 0
+            if isAboveBoard or PIECES[piece[&#x27;shape&#x27;]][piece[&#x27;rotation&#x27;]][y][x] == BLANK:
+                continue
+            if not isOnBoard(x + piece[&#x27;x&#x27;] + adjX, y + piece[&#x27;y&#x27;] + adjY):
+                return False
+            if board[x + piece[&#x27;x&#x27;] + adjX][y + piece[&#x27;y&#x27;] + adjY] != BLANK:
+                return False
+    return True
+
+def isCompleteLine(board, y):
+    # Return True if the line filled with boxes with no gaps.
+    for x in range(BOARDWIDTH):
+        if board[x][y] == BLANK:
+            return False
+    return True
+
+
+def removeCompleteLines(board):
+    # Remove any completed lines on the board, move everything above them down, and return the number of complete lines.
+    numLinesRemoved = 0
+    y = BOARDHEIGHT - 1 # start y at the bottom of the board
+    while y &gt;= 0:
+        if isCompleteLine(board, y):
+            # Remove the line and pull boxes down by one line.
+            for pullDownY in range(y, 0, -1):
+                for x in range(BOARDWIDTH):
+                    board[x][pullDownY] = board[x][pullDownY-1]
+            # Set very top line to blank.
+            for x in range(BOARDWIDTH):
+                board[x][0] = BLANK
+            numLinesRemoved += 1
+            # Note on the next iteration of the loop, y is the same.
+            # This is so that if the line that was pulled down is also
+            # complete, it will be removed.
+        else:
+            y -= 1 # move on to check next row up
+    return numLinesRemoved
+
+
+def convertToPixelCoords(boxx, boxy):
+    # Convert the given xy coordinates of the board to xy
+    # coordinates of the location on the screen.
+    return (XMARGIN + (boxx * BOXSIZE)), (TOPMARGIN + (boxy * BOXSIZE))
+
+
+def drawBox(boxx, boxy, color, pixelx=None, pixely=None):
+    # draw a single box (each tetromino piece has four boxes)
+    # at xy coordinates on the board. Or, if pixelx &amp; pixely
+    # are specified, draw to the pixel coordinates stored in
+    # pixelx &amp; pixely (this is used for the &quot;Next&quot; piece).
+    if color == BLANK:
+        return
+    if pixelx == None and pixely == None:
+        pixelx, pixely = convertToPixelCoords(boxx, boxy)
+    pygame.draw.rect(DISPLAYSURF, COLORS[color], (pixelx + 1, pixely + 1, BOXSIZE - 1, BOXSIZE - 1))
+    pygame.draw.rect(DISPLAYSURF, LIGHTCOLORS[color], (pixelx + 1, pixely + 1, BOXSIZE - 4, BOXSIZE - 4))
+
+
+def drawBoard(board):
+    # draw the border around the board
+    pygame.draw.rect(DISPLAYSURF, BORDERCOLOR, (XMARGIN - 3, TOPMARGIN - 7, (BOARDWIDTH * BOXSIZE) + 8, (BOARDHEIGHT * BOXSIZE) + 8), 5)
+
+    # fill the background of the board
+    pygame.draw.rect(DISPLAYSURF, BGCOLOR, (XMARGIN, TOPMARGIN, BOXSIZE * BOARDWIDTH, BOXSIZE * BOARDHEIGHT))
+    # draw the individual boxes on the board
+    for x in range(BOARDWIDTH):
+        for y in range(BOARDHEIGHT):
+            drawBox(x, y, board[x][y])
+
+
+def drawStatus(score, level):
+    # draw the score text
+    scoreSurf = BASICFONT.render(&#x27;Score: %s&#x27; % score, True, TEXTCOLOR)
+    scoreRect = scoreSurf.get_rect()
+    scoreRect.topleft = (WINDOWWIDTH - 150, 20)
+    DISPLAYSURF.blit(scoreSurf, scoreRect)
+
+    # draw the level text
+    levelSurf = BASICFONT.render(&#x27;Level: %s&#x27; % level, True, TEXTCOLOR)
+    levelRect = levelSurf.get_rect()
+    levelRect.topleft = (WINDOWWIDTH - 150, 50)
+    DISPLAYSURF.blit(levelSurf, levelRect)
+
+
+def drawPiece(piece, pixelx=None, pixely=None):
+    shapeToDraw = PIECES[piece[&#x27;shape&#x27;]][piece[&#x27;rotation&#x27;]]
+    if pixelx == None and pixely == None:
+        # if pixelx &amp; pixely hasn&#x27;t been specified, use the location stored in the piece data structure
+        pixelx, pixely = convertToPixelCoords(piece[&#x27;x&#x27;], piece[&#x27;y&#x27;])
+
+    # draw each of the boxes that make up the piece
+    for x in range(TEMPLATEWIDTH):
+        for y in range(TEMPLATEHEIGHT):
+            if shapeToDraw[y][x] != BLANK:
+                drawBox(None, None, piece[&#x27;color&#x27;], pixelx + (x * BOXSIZE), pixely + (y * BOXSIZE))
+
+
+def drawNextPiece(piece):
+    # draw the &quot;next&quot; text
+    nextSurf = BASICFONT.render(&#x27;Next:&#x27;, True, TEXTCOLOR)
+    nextRect = nextSurf.get_rect()
+    nextRect.topleft = (WINDOWWIDTH - 120, 80)
+    DISPLAYSURF.blit(nextSurf, nextRect)
+    # draw the &quot;next&quot; piece
+    drawPiece(piece, pixelx=WINDOWWIDTH-120, pixely=100)
+
+
+if __name__ == &#x27;__main__&#x27;:
+    main()
+</code></pre>
+</main>
+
+<script>
+WIDTH = 640;
+HEIGHT = 480;
+TITLE = 'Tetromino';
+
+const FPS = 25;
+const BOXSIZE = 20;
+const BOARDWIDTH = 10;
+const BOARDHEIGHT = 20;
+const BLANK = '.';
+
+const MOVESIDEWAYSFREQ = 0.15;
+const MOVEDOWNFREQ = 0.1;
+
+const XMARGIN = Math.trunc((WIDTH - (BOARDWIDTH * BOXSIZE)) / 2);
+const TOPMARGIN = HEIGHT - (BOARDHEIGHT * BOXSIZE) - 5;
+
+//                    R    G    B
+const WHITE       = [255, 255, 255];
+const GRAY        = [185, 185, 185];
+const BLACK       = [  0,   0,   0];
+const RED         = [155,   0,   0];
+const LIGHTRED    = [175,  20,  20];
+const GREEN       = [  0, 155,   0];
+const LIGHTGREEN  = [ 20, 175,  20];
+const BLUE        = [  0,   0, 155];
+const LIGHTBLUE   = [ 20,  20, 175];
+const YELLOW      = [155, 155,   0];
+const LIGHTYELLOW = [175, 175,  20];
+
+const BORDERCOLOR = BLUE;
+const BGCOLOR = BLACK;
+const TEXTCOLOR = WHITE;
+const TEXTSHADOWCOLOR = GRAY;
+const COLORS      = [     BLUE,      GREEN,      RED,      YELLOW];
+const LIGHTCOLORS = [LIGHTBLUE, LIGHTGREEN, LIGHTRED, LIGHTYELLOW];
+console.assert(COLORS.length === LIGHTCOLORS.length); // each color must have light color
+
+const TEMPLATEWIDTH = 5;
+const TEMPLATEHEIGHT = 5;
+
+const S_SHAPE_TEMPLATE = [['.....',
+                           '.....',
+                           '..OO.',
+                           '.OO..',
+                           '.....'],
+                          ['.....',
+                           '..O..',
+                           '..OO.',
+                           '...O.',
+                           '.....']];
+
+const Z_SHAPE_TEMPLATE = [['.....',
+                           '.....',
+                           '.OO..',
+                           '..OO.',
+                           '.....'],
+                          ['.....',
+                           '..O..',
+                           '.OO..',
+                           '.O...',
+                           '.....']];
+
+const I_SHAPE_TEMPLATE = [['..O..',
+                           '..O..',
+                           '..O..',
+                           '..O..',
+                           '.....'],
+                          ['.....',
+                           '.....',
+                           'OOOO.',
+                           '.....',
+                           '.....']];
+
+const O_SHAPE_TEMPLATE = [['.....',
+                           '.....',
+                           '.OO..',
+                           '.OO..',
+                           '.....']];
+
+const J_SHAPE_TEMPLATE = [['.....',
+                           '.O...',
+                           '.OOO.',
+                           '.....',
+                           '.....'],
+                          ['.....',
+                           '..OO.',
+                           '..O..',
+                           '..O..',
+                           '.....'],
+                          ['.....',
+                           '.....',
+                           '.OOO.',
+                           '...O.',
+                           '.....'],
+                          ['.....',
+                           '..O..',
+                           '..O..',
+                           '.OO..',
+                           '.....']];
+
+const L_SHAPE_TEMPLATE = [['.....',
+                           '...O.',
+                           '.OOO.',
+                           '.....',
+                           '.....'],
+                          ['.....',
+                           '..O..',
+                           '..O..',
+                           '..OO.',
+                           '.....'],
+                          ['.....',
+                           '.....',
+                           '.OOO.',
+                           '.O...',
+                           '.....'],
+                          ['.....',
+                           '.OO..',
+                           '..O..',
+                           '..O..',
+                           '.....']];
+
+const T_SHAPE_TEMPLATE = [['.....',
+                           '..O..',
+                           '.OOO.',
+                           '.....',
+                           '.....'],
+                          ['.....',
+                           '..O..',
+                           '..OO.',
+                           '..O..',
+                           '.....'],
+                          ['.....',
+                           '.....',
+                           '.OOO.',
+                           '..O..',
+                           '.....'],
+                          ['.....',
+                           '..O..',
+                           '.OO..',
+                           '..O..',
+                           '.....']];
+
+const PIECES = new Map([['S', S_SHAPE_TEMPLATE],
+                        ['Z', Z_SHAPE_TEMPLATE],
+                        ['J', J_SHAPE_TEMPLATE],
+                        ['L', L_SHAPE_TEMPLATE],
+                        ['I', I_SHAPE_TEMPLATE],
+                        ['O', O_SHAPE_TEMPLATE],
+                        ['T', T_SHAPE_TEMPLATE]]);
+
+const BASIC_FONT_SIZE = 18;
+const BIG_FONT_SIZE = 100;
+
+/*
+ * Return a random integer N such that min <= N < max.
+ */
+function getRandomInteger(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor((Math.random() * (max - min)) + min);
+}
+
+const State = Object.freeze({
+  START: 1,
+  PLAY: 2,
+  PAUSED: 3,
+  GAME_OVER: 4
+});
+
+var state, board, lastMoveDownTime, lastMoveSidewaysTime, lastFallTime, movingDown, movingLeft, movingRight, score, fallingPiece, nextPiece, elapsed;
+
+function reset() {
+  state = State.START;
+  resetGame();
+}
+
+function resetGame() {
+  // setup variables for the start of the game
+  board = getBlankBoard();
+  lastMoveDownTime = 0;
+  lastMoveSidewaysTime = 0;
+  lastFallTime = 0;
+  movingDown = false; // note: there is no movingUp variable
+  movingLeft = false;
+  movingRight = false;
+  score = 0;
+
+  fallingPiece = getNewPiece();
+  nextPiece = getNewPiece();
+}
+
+function draw() {
+  screen.fill(BGCOLOR);
+
+  if (state === State.START) {
+    showTextScreen(TITLE);
+  }
+  else if (state === State.PLAY) {
+    // drawing everything on the screen
+    let [level, fallFreq] = calculateLevelAndFallFreq(score);
+    drawBoard(board);
+    drawStatus(score, level);
+    drawNextPiece(nextPiece);
+    if (fallingPiece != null) {
+      drawPiece(fallingPiece);
+    }
+  }
+  else if (state === State.PAUSED) {
+    showTextScreen('Paused'); // pause until a key press
+  }
+  else if (state === State.GAME_OVER) {
+    showTextScreen('Game Over');
+  }
+}
+
+function update(dt) {
+  if (state !== State.PLAY) {
+    return;
+  }
+  elapsed += dt;
+  lastMoveDownTime += dt;
+  lastMoveSidewaysTime += dt;
+  lastFallTime += dt;
+
+  // Slow the speed to FPS
+  if (elapsed < (1 / FPS)) {
+    return;
+  }
+  elapsed = 0;
+
+  let [level, fallFreq] = calculateLevelAndFallFreq(score);
+
+  if (fallingPiece == null) {
+    // No falling piece in play, so start a new piece at the top
+    fallingPiece = nextPiece;
+    nextPiece = getNewPiece();
+    lastFallTime = 0; // reset lastFallTime
+
+    if (!isValidPosition(board, fallingPiece)) {
+      state = State.GAME_OVER;
+      return; // can't fit a new piece on the board, so game over
+    }
+  }
+
+  // handle moving the piece because of user input
+  if ((movingLeft || movingRight) && (lastMoveSidewaysTime > MOVESIDEWAYSFREQ)) {
+    if (movingLeft && isValidPosition(board, fallingPiece, -1)) {
+      fallingPiece['x'] -= 1;
+    }
+    else if (movingRight && isValidPosition(board, fallingPiece, 1)) {
+      fallingPiece['x'] += 1;
+    }
+    lastMoveSidewaysTime = 0;
+  }
+
+  if (movingDown && (lastMoveDownTime > MOVEDOWNFREQ) && isValidPosition(board, fallingPiece, 0, 1)) {
+    fallingPiece['y'] += 1;
+    lastMoveDownTime = 0;
+  }
+
+  // let the piece fall if it is time to fall
+  if (lastFallTime > fallFreq) {
+    // see if the piece has landed
+    if (!isValidPosition(board, fallingPiece, 0, 1)) {
+      // falling piece has landed, set it on the board
+      addToBoard(board, fallingPiece);
+      score += removeCompleteLines(board);
+      fallingPiece = null;
+    }
+    else {
+      // piece did not land, just move the piece down
+      fallingPiece['y'] += 1;
+      lastFallTime = 0;
+    }
+  }
+}
+
+/*
+ * This function displays large text in the
+ * center of the screen until a key is pressed.
+ */
+function showTextScreen(text) {
+  // Draw the text with drop shadow
+  screen.draw.text(text, {
+    fontsize: BIG_FONT_SIZE,
+    color: TEXTCOLOR,
+    shadow: [3, 3],
+    scolor: TEXTSHADOWCOLOR,
+    center: [Math.trunc(WIDTH / 2) - 3, Math.trunc(HEIGHT / 2) - 3]
+  });
+
+  // Draw the additional "Press a key to play." text.
+  screen.draw.text('Press a key to play.', {
+    fontsize: BASIC_FONT_SIZE,
+    color: TEXTCOLOR,
+    center: [Math.trunc(WIDTH / 2), Math.trunc(HEIGHT / 2) + 100]
+  });
+}
+
+/*
+ * Based on the score, return the level the player is on and
+ * how many seconds pass until a falling piece falls one space.
+ */
+function calculateLevelAndFallFreq(score) {
+  let level = Math.trunc(score / 10) + 1;
+  return [level, 0.27 - (level * 0.02)];
+}
+
+/*
+ * return a random new piece in a random rotation and color
+ */
+function getNewPiece() {
+  let keys = Array.from(PIECES.keys()),
+      shape = keys[getRandomInteger(0, keys.length)],
+      newPiece = {'shape': shape,
+                  'rotation': getRandomInteger(0, PIECES.get(shape).length),
+                  'x': Math.trunc(BOARDWIDTH / 2) - Math.trunc(TEMPLATEWIDTH / 2),
+                  'y': -2, // start it above the board (i.e. less than 0)
+                  'color': getRandomInteger(0, COLORS.length)};
+  return newPiece;
+}
+
+/*
+ * fill in the board based on piece's location, shape, and rotation
+ */
+function addToBoard(board, piece) {
+  for (let x = 0; x < TEMPLATEWIDTH; x++) {
+    for (let y = 0; y < TEMPLATEHEIGHT; y++) {
+      if (PIECES.get(piece['shape'])[piece['rotation']][y][x] !== BLANK) {
+        board[x+piece['x']][y+piece['y']] = piece['color'];
+      }
+    }
+  }
+}
+
+/*
+ * create and return a new blank board data structure
+ */
+function getBlankBoard() {
+  let board = [];
+  for (let i = 0; i < BOARDWIDTH; i++) {
+    board.push((new Array(BOARDHEIGHT)).fill(BLANK));
+  }
+  return board;
+}
+
+function isOnBoard(x, y) {
+  return (x >= 0) && (x < BOARDWIDTH) && (y < BOARDHEIGHT);
+}
+
+/*
+ * Return True if the piece is within the board and not colliding
+ */
+function isValidPosition(board, piece, adjX = 0, adjY = 0) {
+  for (let x = 0; x < TEMPLATEWIDTH; x++) {
+    for (let y = 0; y < TEMPLATEHEIGHT; y++) {
+      let isAboveBoard = (y + piece['y'] + adjY) < 0;
+      if (isAboveBoard || (PIECES.get(piece['shape'])[piece['rotation']][y][x] === BLANK)) {
+        continue;
+      }
+      if (!isOnBoard(x + piece['x'] + adjX, y + piece['y'] + adjY)) {
+        return false;
+      }
+      if (board[x+piece['x']+adjX][y+piece['y']+adjY] !== BLANK) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/*
+ * Return True if the line filled with boxes with no gaps.
+ */
+function isCompleteLine(board, y) {
+  for (let x = 0; x < BOARDWIDTH; x++) {
+    if (board[x][y] === BLANK) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/*
+ * Remove any completed lines on the board, move everything above them down, and return the number of complete lines.
+ */
+function removeCompleteLines(board) {
+  let numLinesRemoved = 0,
+      y = BOARDHEIGHT - 1; // start y at the bottom of the board
+  while (y >= 0) {
+    if (isCompleteLine(board, y)) {
+      // Remove the line and pull boxes down by one line.
+      for (let pullDownY = y; pullDownY > 0; pullDownY--) {
+        for (let x = 0; x < BOARDWIDTH; x++) {
+          board[x][pullDownY] = board[x][pullDownY-1];
+        }
+      }
+      // Set very top line to blank.
+      for (let x = 0; x < BOARDWIDTH; x++) {
+        board[x][0] = BLANK;
+      }
+      numLinesRemoved += 1;
+      // Note on the next iteration of the loop, y is the same.
+      // This is so that if the line that was pulled down is also
+      // complete, it will be removed.
+    }
+    else {
+      y -= 1; // move on to check next row up
+    }
+  }
+  return numLinesRemoved;
+}
+
+/*
+ * Convert the given xy coordinates of the board to xy
+ * coordinates of the location on the screen.
+ */
+function convertToPixelCoords(boxx, boxy) {
+  return [XMARGIN + (boxx * BOXSIZE), TOPMARGIN + (boxy * BOXSIZE)];
+}
+
+/*
+ * draw a single box (each tetromino piece has four boxes)
+ * at xy coordinates on the board. Or, if pixelx & pixely
+ * are specified, draw to the pixel coordinates stored in
+ * pixelx & pixely (this is used for the "Next" piece).
+ */
+function drawBox(boxx, boxy, color, pixelx, pixely) {
+  if (color === BLANK) {
+    return;
+  }
+  if ((pixelx == null) && (pixely == null)) {
+    [pixelx, pixely] = convertToPixelCoords(boxx, boxy);
+  }
+  screen.draw.filled_rect(new Rect(pixelx + 1, pixely + 1, BOXSIZE - 1, BOXSIZE - 1), COLORS[color]);
+  screen.draw.filled_rect(new Rect(pixelx + 1, pixely + 1, BOXSIZE - 4, BOXSIZE - 4), LIGHTCOLORS[color]);
+}
+
+function drawBoard(board) {
+  // draw the border around the board
+  screen.draw.rect(new Rect(XMARGIN - 3, TOPMARGIN - 7, (BOARDWIDTH * BOXSIZE) + 8, (BOARDHEIGHT * BOXSIZE) + 8), BORDERCOLOR, 5);
+
+  // fill the background of the board
+  screen.draw.filled_rect(new Rect(XMARGIN, TOPMARGIN, BOXSIZE * BOARDWIDTH, BOXSIZE * BOARDHEIGHT), BGCOLOR);
+  // draw the individual boxes on the board
+  for (let x = 0; x < BOARDWIDTH; x++) {
+    for (let y = 0; y < BOARDHEIGHT; y++) {
+      drawBox(x, y, board[x][y]);
+    }
+  }
+}
+
+function drawStatus(score, level) {
+  // draw the score text
+  screen.draw.text('Score: ' + score, {
+    fontsize: BASIC_FONT_SIZE,
+    color: TEXTCOLOR,
+    topleft: [WIDTH - 150, 20]
+  });
+
+  // draw the level text
+  screen.draw.text('Level: ' + level, {
+    fontsize: BASIC_FONT_SIZE,
+    color: TEXTCOLOR,
+    topleft: [WIDTH - 150, 50]
+  });
+}
+
+function drawPiece(piece, pixelx, pixely) {
+  let shapeToDraw = PIECES.get(piece['shape'])[piece['rotation']];
+  if ((pixelx == null) && (pixely == null)) {
+    // if pixelx & pixely hasn't been specified, use the location stored in the piece data structure
+    [pixelx, pixely] = convertToPixelCoords(piece['x'], piece['y']);
+  }
+
+  // draw each of the boxes that make up the piece
+  for (let x = 0; x < TEMPLATEWIDTH; x++) {
+    for (let y = 0; y < TEMPLATEHEIGHT; y++) {
+      if (shapeToDraw[y][x] !== BLANK) {
+        drawBox(null, null, piece['color'], pixelx + (x * BOXSIZE), pixely + (y * BOXSIZE));
+      }
+    }
+  }
+}
+
+function drawNextPiece(piece) {
+  // draw the "next" text
+  screen.draw.text('Next:', {
+    fontsize: BASIC_FONT_SIZE,
+    color: TEXTCOLOR,
+    topleft: [WIDTH - 120, 80]
+  });
+  // draw the "next" piece
+  drawPiece(piece, WIDTH - 120, 100);
+}
+
+function on_key_down(key, mod, unicode) {
+  if (state === State.PLAY) {
+    if (fallingPiece == null) {
+      return;
+    }
+
+    let rotationCount = PIECES.get(fallingPiece['shape']).length;
+
+    // moving the piece sideways
+    if (((key === keys.LEFT) || (key === keys.A)) && isValidPosition(board, fallingPiece, -1)) {
+      fallingPiece['x'] -= 1;
+      movingLeft = true;
+      movingRight = false;
+      lastMoveSidewaysTime = 0;
+    }
+
+    else if (((key === keys.RIGHT) || (key === keys.D)) && isValidPosition(board, fallingPiece, 1)) {
+      fallingPiece['x'] += 1;
+      movingRight = true;
+      movingLeft = false;
+      lastMoveSidewaysTime = 0;
+    }
+
+    // rotating the piece (if there is room to rotate)
+    else if ((key === keys.UP) || (key === keys.W)) {
+      fallingPiece['rotation'] = (fallingPiece['rotation'] + 1) % rotationCount;
+      if (!isValidPosition(board, fallingPiece)) {
+        fallingPiece['rotation'] = (fallingPiece['rotation'] + rotationCount - 1) % rotationCount;
+      }
+    }
+    else if (key === keys.Q) { // rotate the other direction
+      fallingPiece['rotation'] = (fallingPiece['rotation'] + rotationCount - 1) % rotationCount;
+      if (!isValidPosition(board, fallingPiece)) {
+        fallingPiece['rotation'] = (fallingPiece['rotation'] + 1) % rotationCount;
+      }
+    }
+
+    // making the piece fall faster with the down key
+    else if ((key === keys.DOWN) || (key === keys.S)) {
+      movingDown = true;
+      if (isValidPosition(board, fallingPiece, 0, 1)) {
+        fallingPiece['y'] += 1;
+      }
+      lastMoveDownTime = 0;
+    }
+
+    // move the current piece all the way down
+    else if (key === keys.SPACE) {
+      movingDown = false;
+      movingLeft = false;
+      movingRight = false;
+      let i = 1;
+      while (i < BOARDHEIGHT) {
+        if (!isValidPosition(board, fallingPiece, 0, i)) {
+          break;
+        }
+        i++;
+      }
+      fallingPiece['y'] += i - 1;
+    }
+  }
+  else if (state === State.PAUSED) {
+    state = State.PLAY;
+    lastFallTime = 0;
+    lastMoveDownTime = 0;
+    lastMoveSidewaysTime = 0;
+  }
+  else {
+    state = State.PLAY;
+    resetGame();
+  }
+}
+
+function on_key_up(key, mod) {
+  if (state === State.PLAY) {
+    if (key === keys.P) {
+      // Pausing the game
+      state = State.PAUSED;
+    }
+    else if ((key === keys.LEFT) || (key === keys.A)) {
+      movingLeft = false;
+    }
+    else if ((key === keys.RIGHT) || (key === keys.D)) {
+      movingRight = false;
+    }
+    else if ((key === keys.DOWN) || (key === keys.S)) {
+      movingDown = false;
+    }
+  }
+}
+
+window.addEventListener('load', (event) => {
+  reset();
+  screen.set_mode('#screen', '#reset', '#pause');
+});
+</script>
+</body>
+
+</html>
