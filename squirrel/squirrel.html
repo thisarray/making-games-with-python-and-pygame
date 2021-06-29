@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Squirrel Eat Squirrel</title>
+  <script src="../../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+<section id="imageLoader" class="hidden">
+  <img class="hidden" src="images/gameicon.png" alt="gameicon" data-name="gameicon">
+  <img class="hidden" src="images/grass1.png" alt="grass1" data-name="grass1">
+  <img class="hidden" src="images/grass2.png" alt="grass2" data-name="grass2">
+  <img class="hidden" src="images/grass3.png" alt="grass3" data-name="grass3">
+  <img class="hidden" src="images/grass4.png" alt="grass4" data-name="grass4">
+  <img class="hidden" src="images/squirrel.png" alt="squirrel" data-name="squirrel">
+  <img class="hidden" src="images/squirrelr.png" alt="squirrelr" data-name="squirrelr">
+</section>
+
+<main>
+<h1>Squirrel Eat Squirrel</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<h2>Attribution</h2>
+
+<p>From <a href="https://inventwithpython.com/pygame/chapter8.html">Making Games with Python &amp; Pygame chapter 8</a>.</p>
+
+<p>Original Python code released under a Simplified BSD license.</p>
+
+<p>Images licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/us/legalcode">Creative Commons BY-NC-SA</a>.</p>
+
+<h2>Original Python code</h2>
+
+<pre id="original"><code>
+# Squirrel Eat Squirrel (a 2D Katamari Damacy clone)
+# By Al Sweigart al@inventwithpython.com
+# http://inventwithpython.com/pygame
+# Released under a &quot;Simplified BSD&quot; license
+
+import random, sys, time, math, pygame
+from pygame.locals import *
+
+FPS = 30 # frames per second to update the screen
+WINWIDTH = 640 # width of the program&#x27;s window, in pixels
+WINHEIGHT = 480 # height in pixels
+HALF_WINWIDTH = int(WINWIDTH / 2)
+HALF_WINHEIGHT = int(WINHEIGHT / 2)
+
+GRASSCOLOR = (24, 255, 0)
+WHITE = (255, 255, 255)
+RED = (255, 0, 0)
+
+CAMERASLACK = 90     # how far from the center the squirrel moves before moving the camera
+MOVERATE = 9         # how fast the player moves
+BOUNCERATE = 6       # how fast the player bounces (large is slower)
+BOUNCEHEIGHT = 30    # how high the player bounces
+STARTSIZE = 25       # how big the player starts off
+WINSIZE = 300        # how big the player needs to be to win
+INVULNTIME = 2       # how long the player is invulnerable after being hit in seconds
+GAMEOVERTIME = 4     # how long the &quot;game over&quot; text stays on the screen in seconds
+MAXHEALTH = 3        # how much health the player starts with
+
+NUMGRASS = 80        # number of grass objects in the active area
+NUMSQUIRRELS = 30    # number of squirrels in the active area
+SQUIRRELMINSPEED = 3 # slowest squirrel speed
+SQUIRRELMAXSPEED = 7 # fastest squirrel speed
+DIRCHANGEFREQ = 2    # % chance of direction change per frame
+LEFT = &#x27;left&#x27;
+RIGHT = &#x27;right&#x27;
+
+&quot;&quot;&quot;
+This program has three data structures to represent the player, enemy squirrels, and grass background objects. The data structures are dictionaries with the following keys:
+
+Keys used by all three data structures:
+    &#x27;x&#x27; - the left edge coordinate of the object in the game world (not a pixel coordinate on the screen)
+    &#x27;y&#x27; - the top edge coordinate of the object in the game world (not a pixel coordinate on the screen)
+    &#x27;rect&#x27; - the pygame.Rect object representing where on the screen the object is located.
+Player data structure keys:
+    &#x27;surface&#x27; - the pygame.Surface object that stores the image of the squirrel which will be drawn to the screen.
+    &#x27;facing&#x27; - either set to LEFT or RIGHT, stores which direction the player is facing.
+    &#x27;size&#x27; - the width and height of the player in pixels. (The width &amp; height are always the same.)
+    &#x27;bounce&#x27; - represents at what point in a bounce the player is in. 0 means standing (no bounce), up to BOUNCERATE (the completion of the bounce)
+    &#x27;health&#x27; - an integer showing how many more times the player can be hit by a larger squirrel before dying.
+Enemy Squirrel data structure keys:
+    &#x27;surface&#x27; - the pygame.Surface object that stores the image of the squirrel which will be drawn to the screen.
+    &#x27;movex&#x27; - how many pixels per frame the squirrel moves horizontally. A negative integer is moving to the left, a positive to the right.
+    &#x27;movey&#x27; - how many pixels per frame the squirrel moves vertically. A negative integer is moving up, a positive moving down.
+    &#x27;width&#x27; - the width of the squirrel&#x27;s image, in pixels
+    &#x27;height&#x27; - the height of the squirrel&#x27;s image, in pixels
+    &#x27;bounce&#x27; - represents at what point in a bounce the player is in. 0 means standing (no bounce), up to BOUNCERATE (the completion of the bounce)
+    &#x27;bouncerate&#x27; - how quickly the squirrel bounces. A lower number means a quicker bounce.
+    &#x27;bounceheight&#x27; - how high (in pixels) the squirrel bounces
+Grass data structure keys:
+    &#x27;grassImage&#x27; - an integer that refers to the index of the pygame.Surface object in GRASSIMAGES used for this grass object
+&quot;&quot;&quot;
+
+def main():
+    global FPSCLOCK, DISPLAYSURF, BASICFONT, L_SQUIR_IMG, R_SQUIR_IMG, GRASSIMAGES
+
+    pygame.init()
+    FPSCLOCK = pygame.time.Clock()
+    pygame.display.set_icon(pygame.image.load(&#x27;gameicon.png&#x27;))
+    DISPLAYSURF = pygame.display.set_mode((WINWIDTH, WINHEIGHT))
+    pygame.display.set_caption(&#x27;Squirrel Eat Squirrel&#x27;)
+    BASICFONT = pygame.font.Font(&#x27;freesansbold.ttf&#x27;, 32)
+
+    # load the image files
+    L_SQUIR_IMG = pygame.image.load(&#x27;squirrel.png&#x27;)
+    R_SQUIR_IMG = pygame.transform.flip(L_SQUIR_IMG, True, False)
+    GRASSIMAGES = []
+    for i in range(1, 5):
+        GRASSIMAGES.append(pygame.image.load(&#x27;grass%s.png&#x27; % i))
+
+    while True:
+        runGame()
+
+
+def runGame():
+    # set up variables for the start of a new game
+    invulnerableMode = False  # if the player is invulnerable
+    invulnerableStartTime = 0 # time the player became invulnerable
+    gameOverMode = False      # if the player has lost
+    gameOverStartTime = 0     # time the player lost
+    winMode = False           # if the player has won
+
+    # create the surfaces to hold game text
+    gameOverSurf = BASICFONT.render(&#x27;Game Over&#x27;, True, WHITE)
+    gameOverRect = gameOverSurf.get_rect()
+    gameOverRect.center = (HALF_WINWIDTH, HALF_WINHEIGHT)
+
+    winSurf = BASICFONT.render(&#x27;You have achieved OMEGA SQUIRREL!&#x27;, True, WHITE)
+    winRect = winSurf.get_rect()
+    winRect.center = (HALF_WINWIDTH, HALF_WINHEIGHT)
+
+    winSurf2 = BASICFONT.render(&#x27;(Press &quot;r&quot; to restart.)&#x27;, True, WHITE)
+    winRect2 = winSurf2.get_rect()
+    winRect2.center = (HALF_WINWIDTH, HALF_WINHEIGHT + 30)
+
+    # camerax and cameray are the top left of where the camera view is
+    camerax = 0
+    cameray = 0
+
+    grassObjs = []    # stores all the grass objects in the game
+    squirrelObjs = [] # stores all the non-player squirrel objects
+    # stores the player object:
+    playerObj = {&#x27;surface&#x27;: pygame.transform.scale(L_SQUIR_IMG, (STARTSIZE, STARTSIZE)),
+                 &#x27;facing&#x27;: LEFT,
+                 &#x27;size&#x27;: STARTSIZE,
+                 &#x27;x&#x27;: HALF_WINWIDTH,
+                 &#x27;y&#x27;: HALF_WINHEIGHT,
+                 &#x27;bounce&#x27;:0,
+                 &#x27;health&#x27;: MAXHEALTH}
+
+    moveLeft  = False
+    moveRight = False
+    moveUp    = False
+    moveDown  = False
+
+    # start off with some random grass images on the screen
+    for i in range(10):
+        grassObjs.append(makeNewGrass(camerax, cameray))
+        grassObjs[i][&#x27;x&#x27;] = random.randint(0, WINWIDTH)
+        grassObjs[i][&#x27;y&#x27;] = random.randint(0, WINHEIGHT)
+
+    while True: # main game loop
+        # Check if we should turn off invulnerability
+        if invulnerableMode and time.time() - invulnerableStartTime &gt; INVULNTIME:
+            invulnerableMode = False
+
+        # move all the squirrels
+        for sObj in squirrelObjs:
+            # move the squirrel, and adjust for their bounce
+            sObj[&#x27;x&#x27;] += sObj[&#x27;movex&#x27;]
+            sObj[&#x27;y&#x27;] += sObj[&#x27;movey&#x27;]
+            sObj[&#x27;bounce&#x27;] += 1
+            if sObj[&#x27;bounce&#x27;] &gt; sObj[&#x27;bouncerate&#x27;]:
+                sObj[&#x27;bounce&#x27;] = 0 # reset bounce amount
+
+            # random chance they change direction
+            if random.randint(0, 99) &lt; DIRCHANGEFREQ:
+                sObj[&#x27;movex&#x27;] = getRandomVelocity()
+                sObj[&#x27;movey&#x27;] = getRandomVelocity()
+                if sObj[&#x27;movex&#x27;] &gt; 0: # faces right
+                    sObj[&#x27;surface&#x27;] = pygame.transform.scale(R_SQUIR_IMG, (sObj[&#x27;width&#x27;], sObj[&#x27;height&#x27;]))
+                else: # faces left
+                    sObj[&#x27;surface&#x27;] = pygame.transform.scale(L_SQUIR_IMG, (sObj[&#x27;width&#x27;], sObj[&#x27;height&#x27;]))
+
+
+        # go through all the objects and see if any need to be deleted.
+        for i in range(len(grassObjs) - 1, -1, -1):
+            if isOutsideActiveArea(camerax, cameray, grassObjs[i]):
+                del grassObjs[i]
+        for i in range(len(squirrelObjs) - 1, -1, -1):
+            if isOutsideActiveArea(camerax, cameray, squirrelObjs[i]):
+                del squirrelObjs[i]
+
+        # add more grass &amp; squirrels if we don&#x27;t have enough.
+        while len(grassObjs) &lt; NUMGRASS:
+            grassObjs.append(makeNewGrass(camerax, cameray))
+        while len(squirrelObjs) &lt; NUMSQUIRRELS:
+            squirrelObjs.append(makeNewSquirrel(camerax, cameray))
+
+        # adjust camerax and cameray if beyond the &quot;camera slack&quot;
+        playerCenterx = playerObj[&#x27;x&#x27;] + int(playerObj[&#x27;size&#x27;] / 2)
+        playerCentery = playerObj[&#x27;y&#x27;] + int(playerObj[&#x27;size&#x27;] / 2)
+        if (camerax + HALF_WINWIDTH) - playerCenterx &gt; CAMERASLACK:
+            camerax = playerCenterx + CAMERASLACK - HALF_WINWIDTH
+        elif playerCenterx - (camerax + HALF_WINWIDTH) &gt; CAMERASLACK:
+            camerax = playerCenterx - CAMERASLACK - HALF_WINWIDTH
+        if (cameray + HALF_WINHEIGHT) - playerCentery &gt; CAMERASLACK:
+            cameray = playerCentery + CAMERASLACK - HALF_WINHEIGHT
+        elif playerCentery - (cameray + HALF_WINHEIGHT) &gt; CAMERASLACK:
+            cameray = playerCentery - CAMERASLACK - HALF_WINHEIGHT
+
+        # draw the green background
+        DISPLAYSURF.fill(GRASSCOLOR)
+
+        # draw all the grass objects on the screen
+        for gObj in grassObjs:
+            gRect = pygame.Rect( (gObj[&#x27;x&#x27;] - camerax,
+                                  gObj[&#x27;y&#x27;] - cameray,
+                                  gObj[&#x27;width&#x27;],
+                                  gObj[&#x27;height&#x27;]) )
+            DISPLAYSURF.blit(GRASSIMAGES[gObj[&#x27;grassImage&#x27;]], gRect)
+
+
+        # draw the other squirrels
+        for sObj in squirrelObjs:
+            sObj[&#x27;rect&#x27;] = pygame.Rect( (sObj[&#x27;x&#x27;] - camerax,
+                                         sObj[&#x27;y&#x27;] - cameray - getBounceAmount(sObj[&#x27;bounce&#x27;], sObj[&#x27;bouncerate&#x27;], sObj[&#x27;bounceheight&#x27;]),
+                                         sObj[&#x27;width&#x27;],
+                                         sObj[&#x27;height&#x27;]) )
+            DISPLAYSURF.blit(sObj[&#x27;surface&#x27;], sObj[&#x27;rect&#x27;])
+
+
+        # draw the player squirrel
+        flashIsOn = round(time.time(), 1) * 10 % 2 == 1
+        if not gameOverMode and not (invulnerableMode and flashIsOn):
+            playerObj[&#x27;rect&#x27;] = pygame.Rect( (playerObj[&#x27;x&#x27;] - camerax,
+                                              playerObj[&#x27;y&#x27;] - cameray - getBounceAmount(playerObj[&#x27;bounce&#x27;], BOUNCERATE, BOUNCEHEIGHT),
+                                              playerObj[&#x27;size&#x27;],
+                                              playerObj[&#x27;size&#x27;]) )
+            DISPLAYSURF.blit(playerObj[&#x27;surface&#x27;], playerObj[&#x27;rect&#x27;])
+
+
+        # draw the health meter
+        drawHealthMeter(playerObj[&#x27;health&#x27;])
+
+        for event in pygame.event.get(): # event handling loop
+            if event.type == QUIT:
+                terminate()
+
+            elif event.type == KEYDOWN:
+                if event.key in (K_UP, K_w):
+                    moveDown = False
+                    moveUp = True
+                elif event.key in (K_DOWN, K_s):
+                    moveUp = False
+                    moveDown = True
+                elif event.key in (K_LEFT, K_a):
+                    moveRight = False
+                    moveLeft = True
+                    if playerObj[&#x27;facing&#x27;] != LEFT: # change player image
+                        playerObj[&#x27;surface&#x27;] = pygame.transform.scale(L_SQUIR_IMG, (playerObj[&#x27;size&#x27;], playerObj[&#x27;size&#x27;]))
+                    playerObj[&#x27;facing&#x27;] = LEFT
+                elif event.key in (K_RIGHT, K_d):
+                    moveLeft = False
+                    moveRight = True
+                    if playerObj[&#x27;facing&#x27;] != RIGHT: # change player image
+                        playerObj[&#x27;surface&#x27;] = pygame.transform.scale(R_SQUIR_IMG, (playerObj[&#x27;size&#x27;], playerObj[&#x27;size&#x27;]))
+                    playerObj[&#x27;facing&#x27;] = RIGHT
+                elif winMode and event.key == K_r:
+                    return
+
+            elif event.type == KEYUP:
+                # stop moving the player&#x27;s squirrel
+                if event.key in (K_LEFT, K_a):
+                    moveLeft = False
+                elif event.key in (K_RIGHT, K_d):
+                    moveRight = False
+                elif event.key in (K_UP, K_w):
+                    moveUp = False
+                elif event.key in (K_DOWN, K_s):
+                    moveDown = False
+
+                elif event.key == K_ESCAPE:
+                    terminate()
+
+        if not gameOverMode:
+            # actually move the player
+            if moveLeft:
+                playerObj[&#x27;x&#x27;] -= MOVERATE
+            if moveRight:
+                playerObj[&#x27;x&#x27;] += MOVERATE
+            if moveUp:
+                playerObj[&#x27;y&#x27;] -= MOVERATE
+            if moveDown:
+                playerObj[&#x27;y&#x27;] += MOVERATE
+
+            if (moveLeft or moveRight or moveUp or moveDown) or playerObj[&#x27;bounce&#x27;] != 0:
+                playerObj[&#x27;bounce&#x27;] += 1
+
+            if playerObj[&#x27;bounce&#x27;] &gt; BOUNCERATE:
+                playerObj[&#x27;bounce&#x27;] = 0 # reset bounce amount
+
+            # check if the player has collided with any squirrels
+            for i in range(len(squirrelObjs)-1, -1, -1):
+                sqObj = squirrelObjs[i]
+                if &#x27;rect&#x27; in sqObj and playerObj[&#x27;rect&#x27;].colliderect(sqObj[&#x27;rect&#x27;]):
+                    # a player/squirrel collision has occurred
+
+                    if sqObj[&#x27;width&#x27;] * sqObj[&#x27;height&#x27;] &lt;= playerObj[&#x27;size&#x27;]**2:
+                        # player is larger and eats the squirrel
+                        playerObj[&#x27;size&#x27;] += int( (sqObj[&#x27;width&#x27;] * sqObj[&#x27;height&#x27;])**0.2 ) + 1
+                        del squirrelObjs[i]
+
+                        if playerObj[&#x27;facing&#x27;] == LEFT:
+                            playerObj[&#x27;surface&#x27;] = pygame.transform.scale(L_SQUIR_IMG, (playerObj[&#x27;size&#x27;], playerObj[&#x27;size&#x27;]))
+                        if playerObj[&#x27;facing&#x27;] == RIGHT:
+                            playerObj[&#x27;surface&#x27;] = pygame.transform.scale(R_SQUIR_IMG, (playerObj[&#x27;size&#x27;], playerObj[&#x27;size&#x27;]))
+
+                        if playerObj[&#x27;size&#x27;] &gt; WINSIZE:
+                            winMode = True # turn on &quot;win mode&quot;
+
+                    elif not invulnerableMode:
+                        # player is smaller and takes damage
+                        invulnerableMode = True
+                        invulnerableStartTime = time.time()
+                        playerObj[&#x27;health&#x27;] -= 1
+                        if playerObj[&#x27;health&#x27;] == 0:
+                            gameOverMode = True # turn on &quot;game over mode&quot;
+                            gameOverStartTime = time.time()
+        else:
+            # game is over, show &quot;game over&quot; text
+            DISPLAYSURF.blit(gameOverSurf, gameOverRect)
+            if time.time() - gameOverStartTime &gt; GAMEOVERTIME:
+                return # end the current game
+
+        # check if the player has won.
+        if winMode:
+            DISPLAYSURF.blit(winSurf, winRect)
+            DISPLAYSURF.blit(winSurf2, winRect2)
+
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
+
+
+
+
+def drawHealthMeter(currentHealth):
+    for i in range(currentHealth): # draw red health bars
+        pygame.draw.rect(DISPLAYSURF, RED,   (15, 5 + (10 * MAXHEALTH) - i * 10, 20, 10))
+    for i in range(MAXHEALTH): # draw the white outlines
+        pygame.draw.rect(DISPLAYSURF, WHITE, (15, 5 + (10 * MAXHEALTH) - i * 10, 20, 10), 1)
+
+
+def terminate():
+    pygame.quit()
+    sys.exit()
+
+
+def getBounceAmount(currentBounce, bounceRate, bounceHeight):
+    # Returns the number of pixels to offset based on the bounce.
+    # Larger bounceRate means a slower bounce.
+    # Larger bounceHeight means a higher bounce.
+    # currentBounce will always be less than bounceRate
+    return int(math.sin( (math.pi / float(bounceRate)) * currentBounce ) * bounceHeight)
+
+def getRandomVelocity():
+    speed = random.randint(SQUIRRELMINSPEED, SQUIRRELMAXSPEED)
+    if random.randint(0, 1) == 0:
+        return speed
+    else:
+        return -speed
+
+
+def getRandomOffCameraPos(camerax, cameray, objWidth, objHeight):
+    # create a Rect of the camera view
+    cameraRect = pygame.Rect(camerax, cameray, WINWIDTH, WINHEIGHT)
+    while True:
+        x = random.randint(camerax - WINWIDTH, camerax + (2 * WINWIDTH))
+        y = random.randint(cameray - WINHEIGHT, cameray + (2 * WINHEIGHT))
+        # create a Rect object with the random coordinates and use colliderect()
+        # to make sure the right edge isn&#x27;t in the camera view.
+        objRect = pygame.Rect(x, y, objWidth, objHeight)
+        if not objRect.colliderect(cameraRect):
+            return x, y
+
+
+def makeNewSquirrel(camerax, cameray):
+    sq = {}
+    generalSize = random.randint(5, 25)
+    multiplier = random.randint(1, 3)
+    sq[&#x27;width&#x27;]  = (generalSize + random.randint(0, 10)) * multiplier
+    sq[&#x27;height&#x27;] = (generalSize + random.randint(0, 10)) * multiplier
+    sq[&#x27;x&#x27;], sq[&#x27;y&#x27;] = getRandomOffCameraPos(camerax, cameray, sq[&#x27;width&#x27;], sq[&#x27;height&#x27;])
+    sq[&#x27;movex&#x27;] = getRandomVelocity()
+    sq[&#x27;movey&#x27;] = getRandomVelocity()
+    if sq[&#x27;movex&#x27;] &lt; 0: # squirrel is facing left
+        sq[&#x27;surface&#x27;] = pygame.transform.scale(L_SQUIR_IMG, (sq[&#x27;width&#x27;], sq[&#x27;height&#x27;]))
+    else: # squirrel is facing right
+        sq[&#x27;surface&#x27;] = pygame.transform.scale(R_SQUIR_IMG, (sq[&#x27;width&#x27;], sq[&#x27;height&#x27;]))
+    sq[&#x27;bounce&#x27;] = 0
+    sq[&#x27;bouncerate&#x27;] = random.randint(10, 18)
+    sq[&#x27;bounceheight&#x27;] = random.randint(10, 50)
+    return sq
+
+
+def makeNewGrass(camerax, cameray):
+    gr = {}
+    gr[&#x27;grassImage&#x27;] = random.randint(0, len(GRASSIMAGES) - 1)
+    gr[&#x27;width&#x27;]  = GRASSIMAGES[0].get_width()
+    gr[&#x27;height&#x27;] = GRASSIMAGES[0].get_height()
+    gr[&#x27;x&#x27;], gr[&#x27;y&#x27;] = getRandomOffCameraPos(camerax, cameray, gr[&#x27;width&#x27;], gr[&#x27;height&#x27;])
+    gr[&#x27;rect&#x27;] = pygame.Rect( (gr[&#x27;x&#x27;], gr[&#x27;y&#x27;], gr[&#x27;width&#x27;], gr[&#x27;height&#x27;]) )
+    return gr
+
+
+def isOutsideActiveArea(camerax, cameray, obj):
+    # Return False if camerax and cameray are more than
+    # a half-window length beyond the edge of the window.
+    boundsLeftEdge = camerax - WINWIDTH
+    boundsTopEdge = cameray - WINHEIGHT
+    boundsRect = pygame.Rect(boundsLeftEdge, boundsTopEdge, WINWIDTH * 3, WINHEIGHT * 3)
+    objRect = pygame.Rect(obj[&#x27;x&#x27;], obj[&#x27;y&#x27;], obj[&#x27;width&#x27;], obj[&#x27;height&#x27;])
+    return not boundsRect.colliderect(objRect)
+
+
+if __name__ == &#x27;__main__&#x27;:
+    main()
+</code></pre>
+</main>
+
+<script>
+WIDTH = 640; // width of the program's window, in pixels
+HEIGHT = 480; // height in pixels
+TITLE = 'Squirrel Eat Squirrel';
+
+const FPS = 30; // frames per second to update the screen
+const HALF_WINWIDTH = Math.trunc(WIDTH / 2);
+const HALF_WINHEIGHT = Math.trunc(HEIGHT / 2);
+
+const GRASSCOLOR = [24, 255, 0];
+const WHITE = [255, 255, 255];
+const RED = [255, 0, 0];
+
+const CAMERASLACK = 90;     // how far from the center the squirrel moves before moving the camera
+const MOVERATE = 9;         // how fast the player moves
+const BOUNCERATE = 6;       // how fast the player bounces (large is slower)
+const BOUNCEHEIGHT = 30;    // how high the player bounces
+const STARTSIZE = 25;       // how big the player starts off
+const WINSIZE = 300;        // how big the player needs to be to win
+const INVULNTIME = 2;       // how long the player is invulnerable after being hit in seconds
+const GAMEOVERTIME = 4;     // how long the "game over" text stays on the screen in seconds
+const MAXHEALTH = 3;        // how much health the player starts with
+
+const NUMGRASS = 80;        // number of grass objects in the active area
+const NUMSQUIRRELS = 30;    // number of squirrels in the active area
+const SQUIRRELMINSPEED = 3; // slowest squirrel speed
+const SQUIRRELMAXSPEED = 7; // fastest squirrel speed
+const DIRCHANGEFREQ = 2;    // % chance of direction change per frame
+const LEFT = 'left';
+const RIGHT = 'right';
+
+/*
+This program has three data structures to represent the player, enemy squirrels, and grass background objects. The data structures are dictionaries with the following keys:
+
+Keys used by all three data structures:
+    'x' - the left edge coordinate of the object in the game world (not a pixel coordinate on the screen)
+    'y' - the top edge coordinate of the object in the game world (not a pixel coordinate on the screen)
+    'rect' - the pygame.Rect object representing where on the screen the object is located.
+Player data structure keys:
+    'surface' - the pygame.Surface object that stores the image of the squirrel which will be drawn to the screen.
+    'facing' - either set to LEFT or RIGHT, stores which direction the player is facing.
+    'size' - the width and height of the player in pixels. (The width & height are always the same.)
+    'bounce' - represents at what point in a bounce the player is in. 0 means standing (no bounce), up to BOUNCERATE (the completion of the bounce)
+    'health' - an integer showing how many more times the player can be hit by a larger squirrel before dying.
+Enemy Squirrel data structure keys:
+    'surface' - the pygame.Surface object that stores the image of the squirrel which will be drawn to the screen.
+    'movex' - how many pixels per frame the squirrel moves horizontally. A negative integer is moving to the left, a positive to the right.
+    'movey' - how many pixels per frame the squirrel moves vertically. A negative integer is moving up, a positive moving down.
+    'width' - the width of the squirrel's image, in pixels
+    'height' - the height of the squirrel's image, in pixels
+    'bounce' - represents at what point in a bounce the player is in. 0 means standing (no bounce), up to BOUNCERATE (the completion of the bounce)
+    'bouncerate' - how quickly the squirrel bounces. A lower number means a quicker bounce.
+    'bounceheight' - how high (in pixels) the squirrel bounces
+Grass data structure keys:
+    'grassImage' - an integer that refers to the index of the pygame.Surface object in GRASSIMAGES used for this grass object
+*/
+
+const FONT_SIZE = 32;
+const GRASS_IMAGE_COUNT = 4;
+
+/*
+ * Return a random integer N such that min <= N < max.
+ */
+function getRandomInteger(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor((Math.random() * (max - min)) + min);
+}
+
+var invulnerableMode, invulnerableStartTime, gameOverMode, gameOverStartTime, winMode, camerax, cameray, grassObjs, squirrelObjs, playerObj, moveLeft, moveRight, moveUp, moveDown, elapsed;
+
+function reset() {
+  // set up variables for the start of a new game
+  invulnerableMode = false;  // if the player is invulnerable
+  invulnerableStartTime = 0; // time the player became invulnerable
+  gameOverMode = false;      // if the player has lost
+  gameOverStartTime = 0;     // time the player lost
+  winMode = false;           // if the player has won
+
+  // camerax and cameray are the top left of where the camera view is
+  camerax = 0;
+  cameray = 0;
+
+  grassObjs = [];    // stores all the grass objects in the game
+  squirrelObjs = []; // stores all the non-player squirrel objects
+  // stores the player object:
+  playerObj = new Player();
+
+  moveLeft  = false;
+  moveRight = false;
+  moveUp    = false;
+  moveDown  = false;
+
+  elapsed = 0;
+
+  // start off with some random grass images on the screen
+  for (let i = 0; i < 10; i++) {
+    let grass = new Grass(camerax, cameray);
+    grass.x = getRandomInteger(0, WIDTH + 1);
+    grass.y = getRandomInteger(0, HEIGHT + 1);
+    grassObjs.push(grass);
+  }
+}
+
+function update(dt) {
+  elapsed += dt;
+  invulnerableStartTime += dt;
+  gameOverStartTime += dt;
+
+  // Slow the speed to FPS
+  if (elapsed < (1 / FPS)) {
+    return;
+  }
+  elapsed = 0;
+
+  // Check if we should turn off invulnerability
+  if (invulnerableMode && (invulnerableStartTime > INVULNTIME)) {
+    invulnerableMode = false;
+  }
+
+  // move all the squirrels
+  for (let sObj of squirrelObjs) {
+    // move the squirrel, and adjust for their bounce
+    sObj.x += sObj.movex;
+    sObj.y += sObj.movey;
+    sObj.bounce += 1;
+    if (sObj.bounce > sObj.bouncerate) {
+      sObj.bounce = 0; // reset bounce amount
+    }
+
+    // random chance they change direction
+    if (getRandomInteger(0, 100) < DIRCHANGEFREQ) {
+      sObj.movex = getRandomVelocity();
+      sObj.movey = getRandomVelocity();
+    }
+  }
+
+  // go through all the objects and see if any need to be deleted.
+  for (let i = grassObjs.length - 1; i > -1; i--) {
+    if (isOutsideActiveArea(camerax, cameray, grassObjs[i])) {
+      grassObjs.splice(i, 1);
+    }
+  }
+  for (let i = squirrelObjs.length - 1; i > -1; i--) {
+    if (isOutsideActiveArea(camerax, cameray, squirrelObjs[i])) {
+      squirrelObjs.splice(i, 1);
+    }
+  }
+
+  // add more grass & squirrels if we don't have enough.
+  while (grassObjs.length < NUMGRASS) {
+    grassObjs.push(new Grass(camerax, cameray));
+  }
+  while (squirrelObjs.length < NUMSQUIRRELS) {
+    squirrelObjs.push(new Squirrel(camerax, cameray));
+  }
+
+  // adjust camerax and cameray if beyond the "camera slack"
+  let playerCenterx = playerObj.x + Math.trunc(playerObj.width / 2);
+      playerCentery = playerObj.y + Math.trunc(playerObj.height / 2);
+  if (((camerax + HALF_WINWIDTH) - playerCenterx) > CAMERASLACK) {
+    camerax = playerCenterx + CAMERASLACK - HALF_WINWIDTH;
+  }
+  else if ((playerCenterx - (camerax + HALF_WINWIDTH)) > CAMERASLACK) {
+    camerax = playerCenterx - CAMERASLACK - HALF_WINWIDTH;
+  }
+  if (((cameray + HALF_WINHEIGHT) - playerCentery) > CAMERASLACK) {
+    cameray = playerCentery + CAMERASLACK - HALF_WINHEIGHT;
+  }
+  else if ((playerCentery - (cameray + HALF_WINHEIGHT)) > CAMERASLACK) {
+    cameray = playerCentery - CAMERASLACK - HALF_WINHEIGHT;
+  }
+
+  if (!gameOverMode) {
+    // actually move the player
+    if (moveLeft) {
+      playerObj.x -= MOVERATE;
+    }
+    if (moveRight) {
+      playerObj.x += MOVERATE;
+    }
+    if (moveUp) {
+      playerObj.y -= MOVERATE;
+    }
+    if (moveDown) {
+      playerObj.y += MOVERATE;
+    }
+
+    if ((moveLeft || moveRight || moveUp || moveDown) || (playerObj.bounce !== 0)) {
+      playerObj.bounce += 1;
+    }
+
+    if (playerObj.bounce > BOUNCERATE) {
+      playerObj.bounce = 0; // reset bounce amount
+    }
+
+    // check if the player has collided with any squirrels
+    for (let i = squirrelObjs.length - 1; i > -1; i--) {
+      if (playerObj.getRect(camerax, cameray).colliderect(squirrelObjs[i].getRect(camerax, cameray))) {
+        // a player/squirrel collision has occurred
+
+        let area = squirrelObjs[i].width * squirrelObjs[i].height,
+            increment = Math.trunc(Math.pow(area, 0.2)) + 1;
+        if (area <= (playerObj.width * playerObj.height)) {
+          // player is larger and eats the squirrel
+          playerObj.width += increment;
+          playerObj.height += increment;
+          squirrelObjs.splice(i, 1);
+
+          if ((playerObj.width > WINSIZE) || (playerObj.height > WINSIZE)) {
+            winMode = true; // turn on "win mode"
+          }
+        }
+
+        else if (!invulnerableMode) {
+          // player is smaller and takes damage
+          invulnerableMode = true;
+          invulnerableStartTime = 0;
+          playerObj.health -= 1;
+          if (playerObj.health === 0) {
+            gameOverMode = true; // turn on "game over mode"
+            gameOverStartTime = 0;
+          }
+        }
+      }
+    }
+  }
+  else {
+    if (gameOverStartTime > GAMEOVERTIME) {
+      reset(); // end the current game
+    }
+  }
+}
+
+function draw() {
+  // draw the green background
+  screen.fill(GRASSCOLOR);
+
+  // draw all the grass objects on the screen
+  for (let gObj of grassObjs) {
+    screen.blit(gObj.name, [gObj.x - camerax, gObj.y - cameray]);
+  }
+
+  // draw the other squirrels
+  for (let sObj of squirrelObjs) {
+    screen.draw.filled_rect(sObj.getRect(camerax, cameray), 'brown');
+    screen.blit(sObj.name, sObj.getRect(camerax, cameray).topleft);
+  }
+
+  // draw the player squirrel
+  let flashIsOn = (Math.round(Date.now() / 100) % 2) === 1;
+  if ((!gameOverMode) && (!(invulnerableMode && flashIsOn))) {
+    screen.draw.filled_rect(playerObj.getRect(camerax, cameray), 'blue');
+    screen.blit(playerObj.name, playerObj.getRect(camerax, cameray).topleft);
+  }
+
+  // draw the health meter
+  drawHealthMeter(playerObj.health);
+
+  if (gameOverMode) {
+    // game is over, show "game over" text
+    screen.draw.text('Game Over', {
+      fontsize: FONT_SIZE,
+      color: WHITE,
+      center: [HALF_WINWIDTH, HALF_WINHEIGHT]
+    });
+  }
+
+  // check if the player has won.
+  if (winMode) {
+    screen.draw.text('You have achieved OMEGA SQUIRREL!', {
+      fontsize: FONT_SIZE,
+      color: WHITE,
+      center: [HALF_WINWIDTH, HALF_WINHEIGHT]
+    });
+    screen.draw.text('(Press "r" to restart.)', {
+      fontsize: FONT_SIZE,
+      color: WHITE,
+      center: [HALF_WINWIDTH, HALF_WINHEIGHT + 30]
+    });
+  }
+}
+
+function drawHealthMeter(currentHealth) {
+  for (let i = 0; i < currentHealth; i++) { // draw red health bars
+    screen.draw.filled_rect(new Rect(15, 5 + (10 * MAXHEALTH) - (i * 10), 20, 10), RED);
+  }
+  for (let i = 0; i < MAXHEALTH; i++) { // draw the white outlines
+    screen.draw.rect(new Rect(15, 5 + (10 * MAXHEALTH) - (i * 10), 20, 10), WHITE, 1);
+  }
+}
+
+/*
+ * Returns the number of pixels to offset based on the bounce.
+ * Larger bounceRate means a slower bounce.
+ * Larger bounceHeight means a higher bounce.
+ * currentBounce will always be less than bounceRate
+ */
+function getBounceAmount(currentBounce, bounceRate, bounceHeight) {
+  return Math.trunc(Math.sin( (Math.PI / bounceRate) * currentBounce ) * bounceHeight);
+}
+
+function getRandomVelocity() {
+  let speed = getRandomInteger(SQUIRRELMINSPEED, SQUIRRELMAXSPEED + 1);
+  if (getRandomInteger(0, 2) === 0) {
+    return speed;
+  }
+  else {
+    return -speed;
+  }
+}
+
+function getRandomOffCameraPos(camerax, cameray, objWidth, objHeight) {
+  // create a Rect of the camera view
+  let cameraRect = new Rect(camerax, cameray, WIDTH, HEIGHT),
+      x, y, objRect;
+  while (true) {
+    x = getRandomInteger(camerax - WIDTH, camerax + (2 * WIDTH) + 1);
+    y = getRandomInteger(cameray - HEIGHT, cameray + (2 * HEIGHT) + 1);
+    // create a Rect object with the random coordinates and use colliderect()
+    // to make sure the right edge isn't in the camera view.
+    objRect = new Rect(x, y, objWidth, objHeight);
+    if (!objRect.colliderect(cameraRect)) {
+      return [x, y];
+    }
+  }
+}
+
+class Player {
+  constructor() {
+    this.x = HALF_WINWIDTH;
+    this.y = HALF_WINHEIGHT;
+    this.width = STARTSIZE;
+    this.height = STARTSIZE;
+    this.facing = LEFT;
+    this.bounce = 0;
+    this.health = MAXHEALTH;
+  }
+
+  get name() {
+    if (this.facing === LEFT) {
+      return 'squirrel';
+    }
+    else {
+      return 'squirrelr';
+    }
+  }
+
+  getRect(camerax, cameray) {
+    return new Rect(this.x - camerax,
+                    this.y - cameray - getBounceAmount(this.bounce, BOUNCERATE, BOUNCEHEIGHT),
+                    this.width,
+                    this.height);
+  }
+}
+
+class Squirrel {
+  constructor(camerax, cameray) {
+    let generalSize = getRandomInteger(5, 26),
+        multiplier = getRandomInteger(1, 4),
+        x, y;
+    this.width = (generalSize + getRandomInteger(0, 11)) * multiplier;
+    this.height = (generalSize + getRandomInteger(0, 11)) * multiplier;
+    [x, y] = getRandomOffCameraPos(camerax, cameray, this.width, this.height);
+    this.x = x;
+    this.y = y;
+    this.movex = getRandomVelocity();
+    this.movey = getRandomVelocity();
+    this.bounce = 0;
+    this.bouncerate = getRandomInteger(10, 19);
+    this.bounceheight = getRandomInteger(10, 51);
+  }
+
+  get name() {
+    if (this.movex > 0) { // faces right
+      return 'squirrelr';
+    }
+    else {
+      return 'squirrel';
+    }
+  }
+
+  getRect(camerax, cameray) {
+    return new Rect(this.x - camerax,
+                    this.y - cameray - getBounceAmount(this.bounce, this.bouncerate, this.bounceheight),
+                    this.width,
+                    this.height);
+  }
+}
+
+class Grass extends Actor {
+  constructor(camerax, cameray) {
+    super('grass' + getRandomInteger(1, GRASS_IMAGE_COUNT + 1));
+    this.anchor = 'topleft';
+    this.topleft = getRandomOffCameraPos(camerax, cameray, this.width, this.height);
+  }
+}
+
+/*
+ * Return False if camerax and cameray are more than
+ * a half-window length beyond the edge of the window.
+ */
+function isOutsideActiveArea(camerax, cameray, obj) {
+  let boundsLeftEdge = camerax - WIDTH,
+      boundsTopEdge = cameray - HEIGHT,
+      boundsRect = new Rect(boundsLeftEdge, boundsTopEdge, WIDTH * 3, HEIGHT * 3),
+      objRect = new Rect(obj.x, obj.y, obj.width, obj.height);
+  return (!boundsRect.colliderect(objRect));
+}
+
+function on_key_down(key, mod, unicode) {
+  if ((key === keys.UP) || (key === keys.W)) {
+    moveDown = false;
+    moveUp = true;
+  }
+  else if ((key === keys.DOWN) || (key === keys.S)) {
+    moveUp = false;
+    moveDown = true;
+  }
+  else if ((key === keys.LEFT) || (key === keys.A)) {
+    moveRight = false;
+    moveLeft = true;
+    playerObj.facing = LEFT;
+  }
+  else if ((key === keys.RIGHT) || (key === keys.D)) {
+    moveLeft = false;
+    moveRight = true;
+    playerObj.facing = RIGHT;
+  }
+  else if (winMode && (key === keys.R)) {
+    reset();
+  }
+}
+
+function on_key_up(key, mod) {
+  // stop moving the player's squirrel
+  if ((key === keys.LEFT) || (key === keys.A)) {
+    moveLeft = false;
+  }
+  else if ((key === keys.RIGHT) || (key === keys.D)) {
+    moveRight = false;
+  }
+  else if ((key === keys.UP) || (key === keys.W)) {
+    moveUp = false;
+  }
+  else if ((key === keys.DOWN) || (key === keys.S)) {
+    moveDown = false;
+  }
+}
+
+window.addEventListener('load', (event) => {
+  images.LOAD('#imageLoader img');
+  reset();
+  screen.set_mode('#screen', '#reset', '#pause');
+});
+</script>
+</body>
+
+</html>
