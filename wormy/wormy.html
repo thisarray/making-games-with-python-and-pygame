@@ -343,24 +343,25 @@ function draw() {
     });
     drawPressKeyMsg();
   }
-  else if (state === State.PLAY) {
+  else {
     drawGrid();
     drawWorm(wormCoords);
     drawApple(apple);
     drawScore(wormCoords.length - 3);
-  }
-  else if (state === State.GAME_OVER) {
-    screen.draw.text('Game', {
-      fontsize: 150,
-      color: WHITE,
-      midtop: [WIDTH / 2, 10]
-    });
-    screen.draw.text('Over', {
-      fontsize: 150,
-      color: WHITE,
-      midtop: [WIDTH / 2, 150 + 10 + 25]
-    });
-    drawPressKeyMsg();
+
+    if (state === State.GAME_OVER) {
+      screen.draw.text('Game', {
+        fontsize: 150,
+        color: WHITE,
+        midtop: [WIDTH / 2, 10]
+      });
+      screen.draw.text('Over', {
+        fontsize: 150,
+        color: WHITE,
+        midtop: [WIDTH / 2, 150 + 10 + 25]
+      });
+      drawPressKeyMsg();
+    }
   }
 }
 
