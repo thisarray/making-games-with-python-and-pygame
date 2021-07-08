@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Four in a Row</title>
+  <script src="../../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+<section id="imageLoader" class="hidden">
+  <img class="hidden" src="images/arrow.png" alt="arrow" data-name="arrow">
+  <img class="hidden" src="images/black.png" alt="black" data-name="black">
+  <img class="hidden" src="images/board.png" alt="board" data-name="board">
+  <img class="hidden" src="images/computerwinner.png" alt="computerwinner" data-name="computerwinner">
+  <img class="hidden" src="images/humanwinner.png" alt="humanwinner" data-name="humanwinner">
+  <img class="hidden" src="images/red.png" alt="red" data-name="red">
+  <img class="hidden" src="images/tie.png" alt="tie" data-name="tie">
+</section>
+
+<main>
+<h1>Four in a Row</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<h2>Attribution</h2>
+
+<p>From <a href="https://inventwithpython.com/pygame/chapter10.html">Making Games with Python &amp; Pygame chapter 10</a>.</p>
+
+<p>Original Python code released under a Simplified BSD license.</p>
+
+<p>Images licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/us/legalcode">Creative Commons BY-NC-SA</a>.</p>
+
+<h2>Original Python code</h2>
+
+<pre id="original"><code>
+# Four-In-A-Row (a Connect Four clone)
+# By Al Sweigart al@inventwithpython.com
+# http://inventwithpython.com/pygame
+# Released under a &quot;Simplified BSD&quot; license
+
+import random, copy, sys, pygame
+from pygame.locals import *
+
+BOARDWIDTH = 7  # how many spaces wide the board is
+BOARDHEIGHT = 6 # how many spaces tall the board is
+assert BOARDWIDTH &gt;= 4 and BOARDHEIGHT &gt;= 4, &#x27;Board must be at least 4x4.&#x27;
+
+DIFFICULTY = 2 # how many moves to look ahead. (&gt;2 is usually too much)
+
+SPACESIZE = 50 # size of the tokens and individual board spaces in pixels
+
+FPS = 30 # frames per second to update the screen
+WINDOWWIDTH = 640 # width of the program&#x27;s window, in pixels
+WINDOWHEIGHT = 480 # height in pixels
+
+XMARGIN = int((WINDOWWIDTH - BOARDWIDTH * SPACESIZE) / 2)
+YMARGIN = int((WINDOWHEIGHT - BOARDHEIGHT * SPACESIZE) / 2)
+
+BRIGHTBLUE = (0, 50, 255)
+WHITE = (255, 255, 255)
+
+BGCOLOR = BRIGHTBLUE
+TEXTCOLOR = WHITE
+
+RED = &#x27;red&#x27;
+BLACK = &#x27;black&#x27;
+EMPTY = None
+HUMAN = &#x27;human&#x27;
+COMPUTER = &#x27;computer&#x27;
+
+
+def main():
+    global FPSCLOCK, DISPLAYSURF, REDPILERECT, BLACKPILERECT, REDTOKENIMG
+    global BLACKTOKENIMG, BOARDIMG, ARROWIMG, ARROWRECT, HUMANWINNERIMG
+    global COMPUTERWINNERIMG, WINNERRECT, TIEWINNERIMG
+
+    pygame.init()
+    FPSCLOCK = pygame.time.Clock()
+    DISPLAYSURF = pygame.display.set_mode((WINDOWWIDTH, WINDOWHEIGHT))
+    pygame.display.set_caption(&#x27;Four in a Row&#x27;)
+
+    REDPILERECT = pygame.Rect(int(SPACESIZE / 2), WINDOWHEIGHT - int(3 * SPACESIZE / 2), SPACESIZE, SPACESIZE)
+    BLACKPILERECT = pygame.Rect(WINDOWWIDTH - int(3 * SPACESIZE / 2), WINDOWHEIGHT - int(3 * SPACESIZE / 2), SPACESIZE, SPACESIZE)
+    REDTOKENIMG = pygame.image.load(&#x27;4row_red.png&#x27;)
+    REDTOKENIMG = pygame.transform.smoothscale(REDTOKENIMG, (SPACESIZE, SPACESIZE))
+    BLACKTOKENIMG = pygame.image.load(&#x27;4row_black.png&#x27;)
+    BLACKTOKENIMG = pygame.transform.smoothscale(BLACKTOKENIMG, (SPACESIZE, SPACESIZE))
+    BOARDIMG = pygame.image.load(&#x27;4row_board.png&#x27;)
+    BOARDIMG = pygame.transform.smoothscale(BOARDIMG, (SPACESIZE, SPACESIZE))
+
+    HUMANWINNERIMG = pygame.image.load(&#x27;4row_humanwinner.png&#x27;)
+    COMPUTERWINNERIMG = pygame.image.load(&#x27;4row_computerwinner.png&#x27;)
+    TIEWINNERIMG = pygame.image.load(&#x27;4row_tie.png&#x27;)
+    WINNERRECT = HUMANWINNERIMG.get_rect()
+    WINNERRECT.center = (int(WINDOWWIDTH / 2), int(WINDOWHEIGHT / 2))
+
+    ARROWIMG = pygame.image.load(&#x27;4row_arrow.png&#x27;)
+    ARROWRECT = ARROWIMG.get_rect()
+    ARROWRECT.left = REDPILERECT.right + 10
+    ARROWRECT.centery = REDPILERECT.centery
+
+    isFirstGame = True
+
+    while True:
+        runGame(isFirstGame)
+        isFirstGame = False
+
+
+def runGame(isFirstGame):
+    if isFirstGame:
+        # Let the computer go first on the first game, so the player
+        # can see how the tokens are dragged from the token piles.
+        turn = COMPUTER
+        showHelp = True
+    else:
+        # Randomly choose who goes first.
+        if random.randint(0, 1) == 0:
+            turn = COMPUTER
+        else:
+            turn = HUMAN
+        showHelp = False
+
+    # Set up a blank board data structure.
+    mainBoard = getNewBoard()
+
+    while True: # main game loop
+        if turn == HUMAN:
+            # Human player&#x27;s turn.
+            getHumanMove(mainBoard, showHelp)
+            if showHelp:
+                # turn off help arrow after the first move
+                showHelp = False
+            if isWinner(mainBoard, RED):
+                winnerImg = HUMANWINNERIMG
+                break
+            turn = COMPUTER # switch to other player&#x27;s turn
+        else:
+            # Computer player&#x27;s turn.
+            column = getComputerMove(mainBoard)
+            animateComputerMoving(mainBoard, column)
+            makeMove(mainBoard, BLACK, column)
+            if isWinner(mainBoard, BLACK):
+                winnerImg = COMPUTERWINNERIMG
+                break
+            turn = HUMAN # switch to other player&#x27;s turn
+
+        if isBoardFull(mainBoard):
+            # A completely filled board means it&#x27;s a tie.
+            winnerImg = TIEWINNERIMG
+            break
+
+    while True:
+        # Keep looping until player clicks the mouse or quits.
+        drawBoard(mainBoard)
+        DISPLAYSURF.blit(winnerImg, WINNERRECT)
+        pygame.display.update()
+        FPSCLOCK.tick()
+        for event in pygame.event.get(): # event handling loop
+            if event.type == QUIT or (event.type == KEYUP and event.key == K_ESCAPE):
+                pygame.quit()
+                sys.exit()
+            elif event.type == MOUSEBUTTONUP:
+                return
+
+
+def makeMove(board, player, column):
+    lowest = getLowestEmptySpace(board, column)
+    if lowest != -1:
+        board[column][lowest] = player
+
+
+def drawBoard(board, extraToken=None):
+    DISPLAYSURF.fill(BGCOLOR)
+
+    # draw tokens
+    spaceRect = pygame.Rect(0, 0, SPACESIZE, SPACESIZE)
+    for x in range(BOARDWIDTH):
+        for y in range(BOARDHEIGHT):
+            spaceRect.topleft = (XMARGIN + (x * SPACESIZE), YMARGIN + (y * SPACESIZE))
+            if board[x][y] == RED:
+                DISPLAYSURF.blit(REDTOKENIMG, spaceRect)
+            elif board[x][y] == BLACK:
+                DISPLAYSURF.blit(BLACKTOKENIMG, spaceRect)
+
+    # draw the extra token
+    if extraToken != None:
+        if extraToken[&#x27;color&#x27;] == RED:
+            DISPLAYSURF.blit(REDTOKENIMG, (extraToken[&#x27;x&#x27;], extraToken[&#x27;y&#x27;], SPACESIZE, SPACESIZE))
+        elif extraToken[&#x27;color&#x27;] == BLACK:
+            DISPLAYSURF.blit(BLACKTOKENIMG, (extraToken[&#x27;x&#x27;], extraToken[&#x27;y&#x27;], SPACESIZE, SPACESIZE))
+
+    # draw board over the tokens
+    for x in range(BOARDWIDTH):
+        for y in range(BOARDHEIGHT):
+            spaceRect.topleft = (XMARGIN + (x * SPACESIZE), YMARGIN + (y * SPACESIZE))
+            DISPLAYSURF.blit(BOARDIMG, spaceRect)
+
+    # draw the red and black tokens off to the side
+    DISPLAYSURF.blit(REDTOKENIMG, REDPILERECT) # red on the left
+    DISPLAYSURF.blit(BLACKTOKENIMG, BLACKPILERECT) # black on the right
+
+
+def getNewBoard():
+    board = []
+    for x in range(BOARDWIDTH):
+        board.append([EMPTY] * BOARDHEIGHT)
+    return board
+
+
+def getHumanMove(board, isFirstMove):
+    draggingToken = False
+    tokenx, tokeny = None, None
+    while True:
+        for event in pygame.event.get(): # event handling loop
+            if event.type == QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == MOUSEBUTTONDOWN and not draggingToken and REDPILERECT.collidepoint(event.pos):
+                # start of dragging on red token pile.
+                draggingToken = True
+                tokenx, tokeny = event.pos
+            elif event.type == MOUSEMOTION and draggingToken:
+                # update the position of the red token being dragged
+                tokenx, tokeny = event.pos
+            elif event.type == MOUSEBUTTONUP and draggingToken:
+                # let go of the token being dragged
+                if tokeny &lt; YMARGIN and tokenx &gt; XMARGIN and tokenx &lt; WINDOWWIDTH - XMARGIN:
+                    # let go at the top of the screen.
+                    column = int((tokenx - XMARGIN) / SPACESIZE)
+                    if isValidMove(board, column):
+                        animateDroppingToken(board, column, RED)
+                        board[column][getLowestEmptySpace(board, column)] = RED
+                        drawBoard(board)
+                        pygame.display.update()
+                        return
+                tokenx, tokeny = None, None
+                draggingToken = False
+        if tokenx != None and tokeny != None:
+            drawBoard(board, {&#x27;x&#x27;:tokenx - int(SPACESIZE / 2), &#x27;y&#x27;:tokeny - int(SPACESIZE / 2), &#x27;color&#x27;:RED})
+        else:
+            drawBoard(board)
+
+        if isFirstMove:
+            # Show the help arrow for the player&#x27;s first move.
+            DISPLAYSURF.blit(ARROWIMG, ARROWRECT)
+
+        pygame.display.update()
+        FPSCLOCK.tick()
+
+
+def animateDroppingToken(board, column, color):
+    x = XMARGIN + column * SPACESIZE
+    y = YMARGIN - SPACESIZE
+    dropSpeed = 1.0
+
+    lowestEmptySpace = getLowestEmptySpace(board, column)
+
+    while True:
+        y += int(dropSpeed)
+        dropSpeed += 0.5
+        if int((y - YMARGIN) / SPACESIZE) &gt;= lowestEmptySpace:
+            return
+        drawBoard(board, {&#x27;x&#x27;:x, &#x27;y&#x27;:y, &#x27;color&#x27;:color})
+        pygame.display.update()
+        FPSCLOCK.tick()
+
+
+def animateComputerMoving(board, column):
+    x = BLACKPILERECT.left
+    y = BLACKPILERECT.top
+    speed = 1.0
+    # moving the black tile up
+    while y &gt; (YMARGIN - SPACESIZE):
+        y -= int(speed)
+        speed += 0.5
+        drawBoard(board, {&#x27;x&#x27;:x, &#x27;y&#x27;:y, &#x27;color&#x27;:BLACK})
+        pygame.display.update()
+        FPSCLOCK.tick()
+    # moving the black tile over
+    y = YMARGIN - SPACESIZE
+    speed = 1.0
+    while x &gt; (XMARGIN + column * SPACESIZE):
+        x -= int(speed)
+        speed += 0.5
+        drawBoard(board, {&#x27;x&#x27;:x, &#x27;y&#x27;:y, &#x27;color&#x27;:BLACK})
+        pygame.display.update()
+        FPSCLOCK.tick()
+    # dropping the black tile
+    animateDroppingToken(board, column, BLACK)
+
+
+def getComputerMove(board):
+    potentialMoves = getPotentialMoves(board, BLACK, DIFFICULTY)
+    # get the best fitness from the potential moves
+    bestMoveFitness = -1
+    for i in range(BOARDWIDTH):
+        if potentialMoves[i] &gt; bestMoveFitness and isValidMove(board, i):
+            bestMoveFitness = potentialMoves[i]
+    # find all potential moves that have this best fitness
+    bestMoves = []
+    for i in range(len(potentialMoves)):
+        if potentialMoves[i] == bestMoveFitness and isValidMove(board, i):
+            bestMoves.append(i)
+    return random.choice(bestMoves)
+
+
+def getPotentialMoves(board, tile, lookAhead):
+    if lookAhead == 0 or isBoardFull(board):
+        return [0] * BOARDWIDTH
+
+    if tile == RED:
+        enemyTile = BLACK
+    else:
+        enemyTile = RED
+
+    # Figure out the best move to make.
+    potentialMoves = [0] * BOARDWIDTH
+    for firstMove in range(BOARDWIDTH):
+        dupeBoard = copy.deepcopy(board)
+        if not isValidMove(dupeBoard, firstMove):
+            continue
+        makeMove(dupeBoard, tile, firstMove)
+        if isWinner(dupeBoard, tile):
+            # a winning move automatically gets a perfect fitness
+            potentialMoves[firstMove] = 1
+            break # don&#x27;t bother calculating other moves
+        else:
+            # do other player&#x27;s counter moves and determine best one
+            if isBoardFull(dupeBoard):
+                potentialMoves[firstMove] = 0
+            else:
+                for counterMove in range(BOARDWIDTH):
+                    dupeBoard2 = copy.deepcopy(dupeBoard)
+                    if not isValidMove(dupeBoard2, counterMove):
+                        continue
+                    makeMove(dupeBoard2, enemyTile, counterMove)
+                    if isWinner(dupeBoard2, enemyTile):
+                        # a losing move automatically gets the worst fitness
+                        potentialMoves[firstMove] = -1
+                        break
+                    else:
+                        # do the recursive call to getPotentialMoves()
+                        results = getPotentialMoves(dupeBoard2, tile, lookAhead - 1)
+                        potentialMoves[firstMove] += (sum(results) / BOARDWIDTH) / BOARDWIDTH
+    return potentialMoves
+
+
+def getLowestEmptySpace(board, column):
+    # Return the row number of the lowest empty row in the given column.
+    for y in range(BOARDHEIGHT-1, -1, -1):
+        if board[column][y] == EMPTY:
+            return y
+    return -1
+
+
+def isValidMove(board, column):
+    # Returns True if there is an empty space in the given column.
+    # Otherwise returns False.
+    if column &lt; 0 or column &gt;= (BOARDWIDTH) or board[column][0] != EMPTY:
+        return False
+    return True
+
+
+def isBoardFull(board):
+    # Returns True if there are no empty spaces anywhere on the board.
+    for x in range(BOARDWIDTH):
+        for y in range(BOARDHEIGHT):
+            if board[x][y] == EMPTY:
+                return False
+    return True
+
+
+def isWinner(board, tile):
+    # check horizontal spaces
+    for x in range(BOARDWIDTH - 3):
+        for y in range(BOARDHEIGHT):
+            if board[x][y] == tile and board[x+1][y] == tile and board[x+2][y] == tile and board[x+3][y] == tile:
+                return True
+    # check vertical spaces
+    for x in range(BOARDWIDTH):
+        for y in range(BOARDHEIGHT - 3):
+            if board[x][y] == tile and board[x][y+1] == tile and board[x][y+2] == tile and board[x][y+3] == tile:
+                return True
+    # check / diagonal spaces
+    for x in range(BOARDWIDTH - 3):
+        for y in range(3, BOARDHEIGHT):
+            if board[x][y] == tile and board[x+1][y-1] == tile and board[x+2][y-2] == tile and board[x+3][y-3] == tile:
+                return True
+    # check \ diagonal spaces
+    for x in range(BOARDWIDTH - 3):
+        for y in range(BOARDHEIGHT - 3):
+            if board[x][y] == tile and board[x+1][y+1] == tile and board[x+2][y+2] == tile and board[x+3][y+3] == tile:
+                return True
+    return False
+
+
+if __name__ == &#x27;__main__&#x27;:
+    main()
+</code></pre>
+</main>
+
+<script>
+WIDTH = 640; // width of the program's window, in pixels
+HEIGHT = 480; // height in pixels
+TITLE = 'Four in a Row';
+
+const BOARDWIDTH = 7;  // how many spaces wide the board is
+const BOARDHEIGHT = 6; // how many spaces tall the board is
+console.assert((BOARDWIDTH >= 4) && (BOARDHEIGHT >= 4), 'Board must be at least 4x4.');
+
+const DIFFICULTY = 2; // how many moves to look ahead. (>2 is usually too much)
+
+const SPACESIZE = 50; // size of the tokens and individual board spaces in pixels
+
+const FPS = 30; // frames per second to update the screen
+
+const XMARGIN = Math.trunc((WIDTH - (BOARDWIDTH * SPACESIZE)) / 2);
+const YMARGIN = Math.trunc((HEIGHT - (BOARDHEIGHT * SPACESIZE)) / 2);
+
+const BRIGHTBLUE = [0, 50, 255];
+const WHITE = [255, 255, 255];
+
+const BGCOLOR = BRIGHTBLUE;
+const TEXTCOLOR = WHITE;
+
+const RED = 'red';
+const BLACK = 'black';
+const EMPTY = ' ';
+const HUMAN = 'human';
+const COMPUTER = 'computer';
+
+const REDPILERECT = new Rect(Math.trunc(SPACESIZE / 2), HEIGHT - Math.trunc(3 * SPACESIZE / 2), SPACESIZE, SPACESIZE);
+const BLACKPILERECT = new Rect(WIDTH - Math.trunc(3 * SPACESIZE / 2), HEIGHT - Math.trunc(3 * SPACESIZE / 2), SPACESIZE, SPACESIZE);
+
+/*
+ * Return a random integer N such that min <= N < max.
+ */
+function getRandomInteger(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor((Math.random() * (max - min)) + min);
+}
+
+const State = Object.freeze({
+  PLAY: 1,
+  CUTSCENE: 2,
+  GAME_OVER: 3
+});
+
+var state, turn, showHelp, mainBoard, draggedToken, extraToken;
+
+function reset() {
+  draggedToken = null;
+  extraToken = null;
+  resetGame(true);
+}
+
+function resetGame(isFirstGame) {
+  state = State.PLAY;
+  if (isFirstGame) {
+    // Let the computer go first on the first game, so the player
+    // can see how the tokens are dragged from the token piles.
+    turn = COMPUTER;
+    showHelp = true;
+  }
+  else {
+    // Randomly choose who goes first.
+    if (getRandomInteger(0, 2) === 0) {
+      turn = COMPUTER;
+    }
+    else {
+      turn = HUMAN;
+    }
+    showHelp = false;
+  }
+
+  // Set up a blank board data structure.
+  mainBoard = getNewBoard();
+
+  if (turn === COMPUTER) {
+    getComputerMove(mainBoard);
+  }
+}
+
+function draw() {
+  drawBoard(mainBoard);
+  if (draggedToken != null) {
+    draggedToken.draw();
+  }
+  if (state === State.PLAY) {
+    if (showHelp) {
+      // Show the help arrow for the player's first move.
+      screen.blit('arrow', [REDPILERECT.right + 10, REDPILERECT.top]);
+    }
+  }
+  else if (state === State.GAME_OVER) {
+    let winnerImg = null;
+    if (isWinner(mainBoard, RED)) {
+      winnerImg = new Actor('humanwinner');
+    }
+    else if (isWinner(mainBoard, BLACK)) {
+      winnerImg = new Actor('computerwinner');
+    }
+    else if (isBoardFull(mainBoard)) {
+      // A completely filled board means it's a tie.
+      winnerImg = new Actor('tie');
+    }
+    if (winnerImg != null) {
+      winnerImg.pos = [Math.trunc(WIDTH / 2), Math.trunc(HEIGHT / 2)];
+      winnerImg.draw();
+    }
+  }
+}
+
+function makeMove(board, player, column) {
+  let lowest = getLowestEmptySpace(board, column);
+  if (lowest !== -1) {
+    board[column][lowest] = player;
+  }
+}
+
+function drawBoard(board) {
+  screen.fill(BGCOLOR);
+
+  // draw tokens
+  for (let x = 0; x < BOARDWIDTH; x++) {
+    for (let y = 0; y < BOARDHEIGHT; y++) {
+      if (board[x][y] === RED) {
+        screen.blit('red', [XMARGIN + (x * SPACESIZE), YMARGIN + (y * SPACESIZE)]);
+      }
+      else if (board[x][y] === BLACK) {
+        screen.blit('black', [XMARGIN + (x * SPACESIZE), YMARGIN + (y * SPACESIZE)]);
+      }
+    }
+  }
+
+  // draw the extra token
+  if (extraToken != null) {
+    extraToken.draw();
+  }
+
+  // draw board over the tokens
+  for (let x = 0; x < BOARDWIDTH; x++) {
+    for (let y = 0; y < BOARDHEIGHT; y++) {
+      screen.blit('board', [XMARGIN + (x * SPACESIZE), YMARGIN + (y * SPACESIZE)]);
+    }
+  }
+
+  // draw the red and black tokens off to the side
+  screen.blit('red', REDPILERECT.topleft); // red on the left
+  screen.blit('black', BLACKPILERECT.topleft); // black on the right
+}
+
+function getNewBoard() {
+  let board = [];
+  for (let x = 0; x < BOARDWIDTH; x++) {
+    board.push((new Array(BOARDHEIGHT)).fill(EMPTY));
+  }
+  return board;
+}
+
+function copyBoard(board) {
+  let result = [];
+  for (let x = 0; x < BOARDWIDTH; x++) {
+    result.push(board[x].slice());
+  }
+  return result;
+}
+
+function cutsceneEnd() {
+  if (extraToken == null) {
+    return;
+  }
+
+  let tween = 'linear',
+      topleft;
+  if (extraToken.waypoints.length > 0) {
+    topleft = extraToken.waypoints.shift();
+    if (extraToken.waypoints.length <= 0) {
+      tween = 'bounce_end';
+    }
+    animate(extraToken, 0.5, {topleft: topleft}, tween, cutsceneEnd);
+  }
+  else {
+    mainBoard[extraToken.column][getLowestEmptySpace(mainBoard, extraToken.column)] = extraToken.tile;
+    extraToken = null;
+    if (isWinner(mainBoard, RED)) {
+      state = State.GAME_OVER;
+      return;
+    }
+    else if (isWinner(mainBoard, BLACK)) {
+      state = State.GAME_OVER;
+      return;
+    }
+    else if (isBoardFull(mainBoard)) {
+      state = State.GAME_OVER;
+      return;
+    }
+
+    if (turn === COMPUTER) {
+      turn = HUMAN; // switch to other player's turn
+      state = State.PLAY;
+    }
+    else {
+      turn = COMPUTER; // switch to other player's turn
+      // Computer player's turn.
+      getComputerMove(mainBoard);
+    }
+  }
+}
+
+function getComputerMove(board) {
+  let potentialMoves = getPotentialMoves(board, BLACK, DIFFICULTY),
+      bestMoveFitness = -1,
+      bestMoves = [],
+      column;
+  // get the best fitness from the potential moves
+  for (let i = 0; i < BOARDWIDTH; i++) {
+    if ((potentialMoves[i] > bestMoveFitness) && isValidMove(board, i)) {
+      bestMoveFitness = potentialMoves[i];
+    }
+  }
+  // find all potential moves that have this best fitness
+  for (let i = 0; i < potentialMoves.length; i++) {
+    if ((potentialMoves[i] === bestMoveFitness) && isValidMove(board, i)) {
+      bestMoves.push(i);
+    }
+  }
+  column = bestMoves[getRandomInteger(0, bestMoves.length)];
+
+  state = State.CUTSCENE;
+  extraToken = new Actor('black');
+  extraToken.topleft = BLACKPILERECT.topleft;
+  extraToken.column = column;
+  extraToken.tile = BLACK;
+  extraToken.waypoints = [
+    // moving the black tile over
+    [XMARGIN + (column * SPACESIZE), YMARGIN - SPACESIZE],
+    // dropping the black tile
+    [XMARGIN + (column * SPACESIZE), YMARGIN + (getLowestEmptySpace(mainBoard, column) * SPACESIZE)]
+  ];
+  // moving the black tile up
+  animate(extraToken, 0.5, {topleft: [BLACKPILERECT.left, YMARGIN - SPACESIZE]}, 'linear', cutsceneEnd);
+}
+
+function getPotentialMoves(board, tile, lookAhead) {
+  let enemyTile = RED,
+      potentialMoves = (new Array(BOARDWIDTH)).fill(0),
+      dupeBoard, dupeBoard2;
+
+  if ((lookAhead === 0) || isBoardFull(board)) {
+    return potentialMoves;
+  }
+
+  if (tile === RED) {
+    enemyTile = BLACK;
+  }
+  else {
+    enemyTile = RED;
+  }
+
+  // Figure out the best move to make.
+  for (let firstMove = 0; firstMove < BOARDWIDTH; firstMove++) {
+    dupeBoard = copyBoard(board);
+    if (!isValidMove(dupeBoard, firstMove)) {
+      continue;
+    }
+    makeMove(dupeBoard, tile, firstMove);
+    if (isWinner(dupeBoard, tile)) {
+      // a winning move automatically gets a perfect fitness
+      potentialMoves[firstMove] = 1;
+      break; // don't bother calculating other moves
+    }
+    else {
+      // do other player's counter moves and determine best one
+      if (isBoardFull(dupeBoard)) {
+        potentialMoves[firstMove] = 0;
+      }
+      else {
+        for (let counterMove = 0; counterMove < BOARDWIDTH; counterMove++) {
+          dupeBoard2 = copyBoard(dupeBoard);
+          if (!isValidMove(dupeBoard2, counterMove)) {
+            continue;
+          }
+          makeMove(dupeBoard2, enemyTile, counterMove);
+          if (isWinner(dupeBoard2, enemyTile)) {
+            // a losing move automatically gets the worst fitness
+            potentialMoves[firstMove] = -1;
+            break;
+          }
+          else {
+            // do the recursive call to getPotentialMoves()
+            potentialMoves[firstMove] += (getPotentialMoves(dupeBoard2, tile, lookAhead - 1).reduce((accumulator, currentValue) => accumulator + currentValue, 0) / BOARDWIDTH) / BOARDWIDTH;
+          }
+        }
+      }
+    }
+  }
+  return potentialMoves;
+}
+
+/*
+ * Return the row number of the lowest empty row in the given column.
+ */
+function getLowestEmptySpace(board, column) {
+  for (let y = BOARDHEIGHT - 1; y > -1; y--) {
+    if (board[column][y] === EMPTY) {
+      return y;
+    }
+  }
+  return -1;
+}
+
+/*
+ * Returns True if there is an empty space in the given column.
+ * Otherwise returns False.
+ */
+function isValidMove(board, column) {
+  if ((column < 0) || (column >= BOARDWIDTH) || (board[column][0] !== EMPTY)) {
+    return false;
+  }
+  return true;
+}
+
+/*
+ * Returns True if there are no empty spaces anywhere on the board.
+ */
+function isBoardFull(board) {
+  for (let x = 0; x < BOARDWIDTH; x++) {
+    for (let y = 0; y < BOARDHEIGHT; y++) {
+      if (board[x][y] === EMPTY) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function isWinner(board, tile) {
+  // check horizontal spaces
+  for (let x = 0; x < (BOARDWIDTH - 3); x++) {
+    for (let y = 0; y < BOARDHEIGHT; y++) {
+      if ((board[x][y] === tile) && (board[x+1][y] === tile) && (board[x+2][y] === tile) && (board[x+3][y] === tile)) {
+        return true;
+      }
+    }
+  }
+  // check vertical spaces
+  for (let x = 0; x < BOARDWIDTH; x++) {
+    for (let y = 0; y < (BOARDHEIGHT - 3); y++) {
+      if ((board[x][y] === tile) && (board[x][y+1] === tile) && (board[x][y+2] === tile) && (board[x][y+3] === tile)) {
+        return true;
+      }
+    }
+  }
+  // check / diagonal spaces
+  for (let x = 0; x < (BOARDWIDTH - 3); x++) {
+    for (let y = 3; y < BOARDHEIGHT; y++) {
+      if ((board[x][y] === tile) && (board[x+1][y-1] === tile) && (board[x+2][y-2] === tile) && (board[x+3][y-3] === tile)) {
+        return true;
+      }
+    }
+  }
+  // check \ diagonal spaces
+  for (let x = 0; x < (BOARDWIDTH - 3); x++) {
+    for (let y = 0; y < (BOARDHEIGHT - 3); y++) {
+      if ((board[x][y] === tile) && (board[x+1][y+1] === tile) && (board[x+2][y+2] === tile) && (board[x+3][y+3] === tile)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function on_mouse_down(pos, button) {
+  if (state === State.PLAY) {
+    if (turn === HUMAN) {
+      // Human player's turn.
+      if ((draggedToken == null) && REDPILERECT.collidepoint(pos)) {
+        // start of dragging on red token pile.
+        draggedToken = new Actor('red');
+        draggedToken.pos = pos;
+      }
+      if (showHelp) {
+        // turn off help arrow after the first move
+        showHelp = false;
+      }
+    }
+  }
+  else if (state === State.GAME_OVER) {
+    resetGame(false);
+  }
+}
+
+function on_mouse_move(pos, rel, buttons) {
+  if (draggedToken != null) {
+    // update the position of the red token being dragged
+    draggedToken.pos = pos;
+  }
+}
+
+function on_mouse_up(pos, button) {
+  if (draggedToken != null) {
+    // let go of the token being dragged
+    draggedToken = null;
+
+    if ((pos[1] < YMARGIN) && (pos[0] > XMARGIN) && (pos[0] < (WIDTH - XMARGIN))) {
+      // let go at the top of the screen.
+      let column = Math.trunc((pos[0] - XMARGIN) / SPACESIZE);
+      if (isValidMove(mainBoard, column)) {
+        state = State.CUTSCENE;
+        extraToken = new Actor('red');
+        extraToken.topleft = [XMARGIN + (column * SPACESIZE), YMARGIN - SPACESIZE];
+        extraToken.column = column;
+        extraToken.tile = RED;
+        extraToken.waypoints = [];
+        animate(extraToken, 0.5, {topleft: [extraToken.left, YMARGIN + (getLowestEmptySpace(mainBoard, column) * SPACESIZE)]}, 'bounce_end', cutsceneEnd);
+      }
+    }
+  }
+}
+
+window.addEventListener('load', (event) => {
+  images.LOAD('#imageLoader img');
+  reset();
+  screen.set_mode('#screen', '#reset', '#pause');
+});
+</script>
+</body>
+
+</html>
