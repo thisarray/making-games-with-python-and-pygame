@@ -104,14 +104,18 @@ WIDTH = 400;
 HEIGHT = 300;
 TITLE = 'Animation';
 
+const FPS = 30; // frames per second setting
+
 const WHITE = [255, 255, 255];
-var cat, direction;
+var cat, direction, elapsed;
 
 function reset() {
   cat = new Actor('cat');
   cat.x = 10;
   cat.y = 10;
   direction = 'right';
+
+  elapsed = 0;
 }
 
 function draw() {
@@ -119,7 +123,15 @@ function draw() {
   cat.draw();
 }
 
-function update() {
+function update(dt) {
+  elapsed += dt;
+
+  // Slow the speed to FPS
+  if (elapsed < (1 / FPS)) {
+    return;
+  }
+  elapsed = 0;
+
   if (direction === 'right') {
     cat.x += 5;
     if (cat.x === 280) {
