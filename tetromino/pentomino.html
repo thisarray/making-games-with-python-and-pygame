@@ -1222,7 +1222,10 @@ function draw() {
   if (state === State.START) {
     showTextScreen(TITLE);
   }
-  else if (state === State.PLAY) {
+  else if (state === State.PAUSED) {
+    showTextScreen('Paused'); // pause until a key press
+  }
+  else {
     // drawing everything on the screen
     let [level, fallFreq] = calculateLevelAndFallFreq(score);
     drawBoard(board);
@@ -1231,12 +1234,10 @@ function draw() {
     if (fallingPiece != null) {
       drawPiece(fallingPiece);
     }
-  }
-  else if (state === State.PAUSED) {
-    showTextScreen('Paused'); // pause until a key press
-  }
-  else if (state === State.GAME_OVER) {
-    showTextScreen('Game Over');
+
+    if (state === State.GAME_OVER) {
+      showTextScreen('Game Over');
+    }
   }
 }
 
