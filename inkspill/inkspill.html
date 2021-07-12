@@ -714,6 +714,21 @@ function drawColorSchemeBoxes(x, y, schemeNum) {
   }
 }
 
+function floodAnimation(paletteClicked) {
+  if ((paletteClicked != null) && (paletteClicked !== lastPaletteClicked)) {
+    // a palette button was clicked that is different from the
+    // last palette button clicked (this check prevents the player
+    // from accidentally clicking the same palette twice)
+    lastPaletteClicked = paletteClicked;
+    life -= 1;
+    floodBoard = copyBoard(mainBoard);
+    floodFill(floodBoard, mainBoard[0][0], paletteClicked, 0, 0);
+    alpha = 0;
+    elapsed = 0;
+    state = State.CUTSCENE;
+  }
+}
+
 /*
  * Creates a board data structure with random colors for each box.
  */
@@ -904,20 +919,7 @@ function on_mouse_down(pos, button) {
     }
     else {
       // check if a palette button was clicked
-      let paletteClicked = getColorOfPaletteAt(pos[0], pos[1]);
-
-      if ((paletteClicked != null) && (paletteClicked !== lastPaletteClicked)) {
-        // a palette button was clicked that is different from the
-        // last palette button clicked (this check prevents the player
-        // from accidentally clicking the same palette twice)
-        lastPaletteClicked = paletteClicked;
-        life -= 1;
-        floodBoard = copyBoard(mainBoard);
-        floodFill(floodBoard, mainBoard[0][0], paletteClicked, 0, 0);
-        alpha = 0;
-        elapsed = 0;
-        state = State.CUTSCENE;
-      }
+      floodAnimation(getColorOfPaletteAt(pos[0], pos[1]));
     }
   }
   else if (state === State.SETTINGS) {
@@ -983,6 +985,29 @@ function on_mouse_down(pos, button) {
   }
   else if (state === State.GAME_OVER) {
     resetGame();
+  }
+}
+
+function on_key_down(key, mod, unicode) {
+  if (state === State.PLAY) {
+    if ((key === keys.K_1) || (key === keys.F1)) {
+      floodAnimation(0);
+    }
+    else if ((key === keys.K_2) || (key === keys.F2)) {
+      floodAnimation(1);
+    }
+    else if ((key === keys.K_3) || (key === keys.F3)) {
+      floodAnimation(2);
+    }
+    else if ((key === keys.K_4) || (key === keys.F4)) {
+      floodAnimation(3);
+    }
+    else if ((key === keys.K_5) || (key === keys.F5)) {
+      floodAnimation(4);
+    }
+    else if ((key === keys.K_6) || (key === keys.F6)) {
+      floodAnimation(5);
+    }
   }
 }
 
