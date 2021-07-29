@@ -610,7 +610,7 @@ function update(dt) {
   }
 
   // adjust camerax and cameray if beyond the "camera slack"
-  let playerCenterx = playerObj.x + Math.trunc(playerObj.width / 2);
+  let playerCenterx = playerObj.x + Math.trunc(playerObj.width / 2),
       playerCentery = playerObj.y + Math.trunc(playerObj.height / 2);
   if (((camerax + HALF_WINWIDTH) - playerCenterx) > CAMERASLACK) {
     camerax = playerCenterx + CAMERASLACK - HALF_WINWIDTH;
@@ -697,15 +697,13 @@ function draw() {
 
   // draw the other squirrels
   for (let sObj of squirrelObjs) {
-    screen.draw.filled_rect(sObj.getRect(camerax, cameray), 'brown');
-    screen.blit(sObj.name, sObj.getRect(camerax, cameray).topleft);
+    screen.blit(sObj.name, sObj.getRect(camerax, cameray));
   }
 
   // draw the player squirrel
   let flashIsOn = (Math.round(Date.now() / 100) % 2) === 1;
   if ((!gameOverMode) && (!(invulnerableMode && flashIsOn))) {
-    screen.draw.filled_rect(playerObj.getRect(camerax, cameray), 'blue');
-    screen.blit(playerObj.name, playerObj.getRect(camerax, cameray).topleft);
+    screen.blit(playerObj.name, playerObj.getRect(camerax, cameray));
   }
 
   // draw the health meter
