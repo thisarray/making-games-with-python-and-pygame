@@ -990,22 +990,22 @@ function on_mouse_down(pos, button) {
 
 function on_key_down(key, mod, unicode) {
   if (state === State.PLAY) {
-    if ((key === keys.K_1) || (key === keys.F1)) {
+    if ((key === keys.K_1) || (key === keys.F1) || (key === keys.KP1)) {
       floodAnimation(0);
     }
-    else if ((key === keys.K_2) || (key === keys.F2)) {
+    else if ((key === keys.K_2) || (key === keys.F2) || (key === keys.KP2)) {
       floodAnimation(1);
     }
-    else if ((key === keys.K_3) || (key === keys.F3)) {
+    else if ((key === keys.K_3) || (key === keys.F3) || (key === keys.KP3)) {
       floodAnimation(2);
     }
-    else if ((key === keys.K_4) || (key === keys.F4)) {
+    else if ((key === keys.K_4) || (key === keys.F4) || (key === keys.KP4)) {
       floodAnimation(3);
     }
-    else if ((key === keys.K_5) || (key === keys.F5)) {
+    else if ((key === keys.K_5) || (key === keys.F5) || (key === keys.KP5)) {
       floodAnimation(4);
     }
-    else if ((key === keys.K_6) || (key === keys.F6)) {
+    else if ((key === keys.K_6) || (key === keys.F6) || (key === keys.KP6)) {
       floodAnimation(5);
     }
   }
