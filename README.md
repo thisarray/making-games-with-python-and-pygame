@@ -23,8 +23,10 @@ Chapter 2 - Pygame Basics
 
 Chapter 7 - Tetromino
 - [tetromino](https://thisarray.github.io/making-games-with-python-and-pygame/tetromino/tetromino.html)
-- [pentomino](https://thisarray.github.io/making-games-with-python-and-pygame/tetromino/pentomino.html)
-- [tetrominoforidiots](https://thisarray.github.io/making-games-with-python-and-pygame/tetromino/tetrominoforidiots.html)
+- [pentomino](https://thisarray.github.io/making-games-with-python-and-pygame/tetromino/pentomino.html) - A version of Tetromino using pieces made from 5 boxes.
+- [tetrominoforidiots](https://thisarray.github.io/making-games-with-python-and-pygame/tetromino/tetrominoforidiots.html) - A version of Tetromino using pieces made from 1 box.
+- [tromino](https://thisarray.github.io/making-games-with-python-and-pygame/tetromino/tromino.html) - A version of Tetromino using pieces made from 3 boxes.
+- [domino](https://thisarray.github.io/making-games-with-python-and-pygame/tetromino/domino.html) - A version of Tetromino using pieces made from 2 boxes.
 
 [Chapter 8 - Squirrel Eat Squirrel](https://thisarray.github.io/making-games-with-python-and-pygame/squirrel/squirrel.html)
 
