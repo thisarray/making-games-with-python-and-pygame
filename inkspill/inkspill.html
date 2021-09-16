@@ -585,6 +585,8 @@ function resetGame() {
 
   floodBoard = null;
   alpha = 0;
+
+  console.log('Best move: ' + (bestMove(mainBoard) + 1));
 }
 
 function draw() {
@@ -673,6 +675,7 @@ function update(dt) {
       }
       else {
         state = State.PLAY;
+        console.log('Best move: ' + (bestMove(mainBoard) + 1));
       }
     }
   }
@@ -903,6 +906,61 @@ function leftTopPixelCoordOfBox(boxx, boxy) {
   let xmargin = Math.trunc((WIDTH - (boardWidth * boxSize)) / 2),
       ymargin = Math.trunc((HEIGHT - (boardHeight * boxSize)) / 2);
   return [(boxx * boxSize) + xmargin, (boxy * boxSize) + ymargin];
+}
+
+/*
+ * Return an Array containing the counts of boxes with each palette color.
+ */
+function countColor(board) {
+  let counter = (new Array(paletteColors.length)).fill(0);
+  for (let x = 0; x < boardWidth; x++) {
+    for (let y = 0; y < boardHeight; y++) {
+      counter[board[x][y]] += 1;
+    }
+  }
+
+  // Assert the counts sum to the number of boxes in board
+  console.assert(counter.reduce(
+    (accumulator, currentValue, currentIndex, array) => accumulator + currentValue) === (boardWidth * boardHeight),
+                 'sum !== width * height');
+
+  return counter;
+}
+
+/*
+ * Return the best move for the given board.
+ *
+ * This is the same as finding the color with the most boxes bordering our upperleft patch.
+ * We can find it by changing the patch to each color and then to a different color.
+ * The difference in the number of boxes with that color gives us a count.
+ * The best move is the color with the highest count.
+ */
+function bestMove(board) {
+  let difference = (new Array(paletteColors.length)).fill(0),
+      bestMove = 0,
+      tempBoard, moveCounter, changeCounter;
+
+  for (let i = 0; i < paletteColors.length; i++) {
+    tempBoard = copyBoard(board);
+    floodFill(tempBoard, tempBoard[0][0], i, 0, 0);
+    moveCounter = countColor(tempBoard);
+    if (i > 0) {
+      floodFill(tempBoard, i, i - 1, 0, 0);
+    }
+    else {
+      floodFill(tempBoard, i, paletteColors.length - 1, 0, 0);
+    }
+    changeCounter = countColor(tempBoard);
+
+    difference[i] = moveCounter[i] - changeCounter[i];
+    if (difference[i] > difference[bestMove]) {
+      bestMove = i;
+    }
+  }
+
+  console.log(difference);
+
+  return bestMove;
 }
 
 function on_mouse_down(pos, button) {
