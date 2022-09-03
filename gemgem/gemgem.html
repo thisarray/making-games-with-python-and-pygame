@@ -674,7 +674,7 @@ const LEFT = 'left';
 const RIGHT = 'right';
 
 const EMPTY_SPACE = -1; // an arbitrary, nonpositive value
-const ROWABOVEBOARD = 'row above board' // an arbitrary, noninteger value
+const ROWABOVEBOARD = 'row above board'; // an arbitrary, noninteger value
 
 const FONT_SIZE = 36;
 
@@ -1203,10 +1203,7 @@ function on_mouse_up(pos, button) {
 }
 
 window.addEventListener('load', (event) => {
-  images.LOAD('#imageLoader img');
-  sounds.LOAD('#soundLoader audio');
-  reset();
-  screen.set_mode('#screen', '#reset', '#pause');
+  screen.init();
 });
 </script>
 </body>

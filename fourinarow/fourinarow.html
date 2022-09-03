@@ -841,9 +841,7 @@ function on_mouse_up(pos, button) {
 }
 
 window.addEventListener('load', (event) => {
-  images.LOAD('#imageLoader img');
-  reset();
-  screen.set_mode('#screen', '#reset', '#pause');
+  screen.init();
 });
 </script>
 </body>
