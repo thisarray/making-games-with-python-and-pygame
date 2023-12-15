@@ -788,10 +788,10 @@ function on_mouse_down(pos, button) {
 
     let [blankx, blanky] = getBlankPosition(mainBoard),
         slideTo = null; // the direction, if any, a tile should slide
-    if ((spotx === (blankx + 1)) && (spoty == blanky)) {
+    if ((spotx === (blankx + 1)) && (spoty === blanky)) {
       slideTo = LEFT;
     }
-    else if ((spotx === (blankx - 1)) && (spoty == blanky)) {
+    else if ((spotx === (blankx - 1)) && (spoty === blanky)) {
       slideTo = RIGHT;
     }
     else if ((spotx === blankx) && (spoty === (blanky + 1))) {
