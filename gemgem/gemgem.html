@@ -749,7 +749,7 @@ function draw() {
       gem.draw();
     }
     for (let [value, x, y] of cutscenePoints) {
-      screen.draw.text(value.toFixed(0), {
+      screen.draw.text(value.toFixed(), {
         fontsize: FONT_SIZE,
         color: SCORECOLOR,
         center: [x, y]
@@ -1136,7 +1136,7 @@ function drawBoard(board) {
 }
 
 function drawScore(score) {
-  screen.draw.text(score.toFixed(0), {
+  screen.draw.text(score.toFixed(), {
     fontsize: FONT_SIZE,
     color: SCORECOLOR,
     bottomleft: [10, HEIGHT - 6]

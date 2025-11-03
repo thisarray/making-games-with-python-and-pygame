@@ -625,7 +625,7 @@ function getSpotClicked(board, x, y) {
 
 function drawTile(left, top, number) {
   screen.draw.filled_rect(new Rect(left, top, TILESIZE, TILESIZE), TILECOLOR);
-  screen.draw.text(number.toFixed(0), {
+  screen.draw.text(number.toFixed(), {
     fontsize: BASICFONTSIZE,
     color: TEXTCOLOR,
     center: [left + Math.trunc(TILESIZE / 2), top + Math.trunc(TILESIZE / 2)]
